@@ -2029,9 +2029,10 @@ function renderKOMatchesTable(container) {
   const canEdit = can('result');
   const sec = document.createElement('div'); sec.className = 'schedule-section';
   
+  const hasTime = S.schedule.some(r => r.time);
   let html = `<h3>📋 Danh sách trận – Loại trực tiếp</h3>
   <table><thead><tr>
-    <th>Trận</th><th>Sân</th><th>Vòng</th>
+    <th>Trận</th><th>Sân</th>${hasTime ? '<th>Giờ</th>' : ''}<th>Vòng</th>
     <th>VĐV 1</th><th style="text-align:center">Tỉ số</th><th>VĐV 2</th>
     ${canEdit ? '<th style="text-align:center">Thao tác</th>' : ''}
   </tr></thead><tbody>`;
@@ -2080,6 +2081,7 @@ function renderKOMatchesTable(container) {
     html += `<tr>
       <td><span class="badge">#${matchNo}</span></td>
       <td>${san}</td>
+      ${hasTime ? `<td><strong style="color:var(--accent);font-family:'Barlow Condensed',sans-serif">${r.time || '–'}</strong></td>` : ''}
       <td style="font-size:12px;color:var(--muted)">${roundName}</td>
       <td class="${p1Class}">${p1}</td>
       ${scoreCell}
