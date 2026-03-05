@@ -2129,6 +2129,9 @@ function saveKnockoutResult(ri, mi) {
   const totS2 = sets.reduce((a, s) => a + s.s2, 0);
   S.knockoutResults[`${ri},${mi}`] = { s1: totS1, s2: totS2, w1, w2, sets, winner };
   rebuildKnockoutTree();
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('saveKnockoutResult:', e));
+  }
   renderContent();
   if (S.schedule && S.schedule.length) showTab('matches');
 }
@@ -2140,6 +2143,9 @@ function editKnockoutResult(ri, mi) {
     for (let m = 0; m < (S.knockoutRounds[r]||[]).length; m++)
       delete S.knockoutResults[`${r},${m}`];
   rebuildKnockoutTree();
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('editKnockoutResult:', e));
+  }
   renderContent();
   if (S.schedule && S.schedule.length) showTab('matches');
 }
@@ -2231,12 +2237,19 @@ function saveRRResult(groupName, idx) {
   const totS2 = sets.reduce((a, s) => a + s.s2, 0);
   const key = `${groupName}:${idx}`;
   S.rrResults[key] = { s1: totS1, s2: totS2, w1, w2, sets, winner };
+  // Lưu lên Supabase
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('saveRRResult:', e));
+  }
   renderContent();
   showTabRR('matches');
 }
 
 function editRRResult(groupName, idx) {
   delete S.rrResults[`${groupName}:${idx}`];
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('editRRResult:', e));
+  }
   renderContent();
   showTabRR('matches');
 }
@@ -2641,8 +2654,9 @@ function showTabRR(tab) {
 }
 
 /* ── RR Matches with score input ── */
-function renderRRMatchesWithScore(container) {
+async function renderRRMatchesWithScore(container) {
   const canEdit = can('result');
+  await loadAssignmentsForTable();
 
   // Group by group name
   const byGroup = {};
@@ -2685,7 +2699,16 @@ function renderRRMatchesWithScore(container) {
         if (!result.winner) { p1Class = ''; p2Class = ''; } // draw
       }
 
-      let scoreCell = '';
+      const safeGName = gName.replace(/'/g,"\\'");
+      // match_key: rr::GroupName::pairIdx — dùng :: để parse chính xác
+      const rrMatchKey = 'rr::' + gName + '::' + pairIdx;
+      const rrSafeKey  = 'rr_' + gName.replace(/[^a-zA-Z0-9]/g,'_') + '_' + pairIdx;
+      const rrAssignment = _cachedAssignments[rrMatchKey];
+      const rrMatchNo = (pairIdx + 1);
+      const hasActiveRef = rrAssignment && rrAssignment.status !== 'done';
+
+      // Score cell
+      let scoreTd = '';
       if (result) {
         const w1 = result.w1 !== undefined ? result.w1 : result.s1;
         const w2 = result.w2 !== undefined ? result.w2 : result.s2;
@@ -2695,31 +2718,53 @@ function renderRRMatchesWithScore(container) {
         const mainScore = result.sets && result.sets.length === 1
           ? `${result.sets[0].s1}–${result.sets[0].s2}`
           : `${w1}–${w2} set`;
-        scoreCell = `<td style="text-align:center">
+        scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
           <span class="score-done">${mainScore}</span>
           ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-          ${canEdit ? `<button class="btn-edit-score" onclick="editRRResult('${gName.replace(/'/g,"\\'")}',${pairIdx})">✏️</button>` : ''}
+          ${canEdit ? `<button class="btn-edit-score" onclick="editRRResult('${safeGName}',${pairIdx})">✏️</button>` : ''}
+        </td>`;
+      } else if (hasActiveRef) {
+        // Có trọng tài đang chấm → ẩn ô nhập, hiện live
+        scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted)">
+          <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ ĐANG DIỄN RA</span>
         </td>`;
       } else if (canEdit) {
         const safeId = gName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + pairIdx;
-        scoreCell = `<td><div class="sets-input-wrap" id="rrswrap_${safeId}">
+        scoreTd = `<td id="liveScore_${rrSafeKey}"><div class="sets-input-wrap" id="rrswrap_${safeId}">
           <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Để trống set không đấu</div>
           ${buildSetInputRows('rr', safeId)}
           <div style="margin-top:4px">
-            <button class="btn-save-score" onclick="saveRRResult('${gName.replace(/'/g,"\\'")}',${pairIdx})">✓ Lưu</button>
+            <button class="btn-save-score" onclick="saveRRResult('${safeGName}',${pairIdx})">✓ Lưu</button>
           </div>
         </div></td>`;
       } else {
-        scoreCell = `<td style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+        scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
       }
 
-      html += `<tr>
+      // Assign cell
+      let assignCell = '';
+      if (canEdit) {
+        if (rrAssignment && rrAssignment.status === 'done') {
+          assignCell = `<td class="ref-info-cell"><span style="color:var(--muted);font-size:11px">✅ ${rrAssignment.referee}</span></td>`;
+        } else if (hasActiveRef) {
+          assignCell = `<td class="ref-info-cell">
+            <span class="assigned-badge">🟠 ${rrAssignment.referee}</span>
+            <button class="btn-assign" style="margin-left:4px;font-size:10px" onclick="openAssignModal(0,0,${rrMatchNo},'${p1.replace(/'/g,"\\'")}','${p2.replace(/'/g,"\\'")}','${rrMatchKey}')">✏️</button>
+          </td>`;
+        } else {
+          assignCell = `<td style="text-align:center">
+            <button class="btn-assign" onclick="openAssignModal(0,0,${rrMatchNo},'${p1.replace(/'/g,"\\'")}','${p2.replace(/'/g,"\\'")}','${rrMatchKey}')">+ Phân công</button>
+          </td>`;
+        }
+      }
+
+      html += `<tr id="liveRow_${rrSafeKey}">
         <td style="color:var(--muted);font-size:11px">${pairIdx + 1}</td>`;
       if (r.san) html += `<td>${r.san}</td><td><strong style="color:var(--accent)">${r.time}</strong></td>`;
       html += `<td class="${p1Class}">${p1}</td>
-        ${scoreCell}
+        ${scoreTd}
         <td class="${p2Class}">${p2}</td>
-        ${canEdit ? '<td></td>' : ''}
+        ${assignCell}
       </tr>`;
     });
 
@@ -2727,6 +2772,7 @@ function renderRRMatchesWithScore(container) {
     sec.innerHTML = html;
     container.appendChild(sec);
   }
+  setTimeout(applyPendingLiveScores, 80);
 }
 
 /* ── RR Rankings ── */
@@ -3245,10 +3291,16 @@ let _assignTarget = null; // { ri, mi, matchNo, matchLabel, vdv1, vdv2 }
 let _assignSelected = null;
 let _assignments = []; // cached
 
-async function openAssignModal(ri, mi, matchNo, vdv1, vdv2) {
+async function openAssignModal(ri, mi, matchNo, vdv1, vdv2, customMatchKey) {
   if (!can('assign')) { alert('⛔ Bạn không có quyền phân công.'); return; }
   if (!S._tournamentId) { alert('Vui lòng lưu giải đấu trước khi phân công trọng tài.'); return; }
-  _assignTarget = { ri, mi, matchNo, matchLabel: 'Trận #' + matchNo, vdv1, vdv2 };
+  const matchKey = customMatchKey || (ri + ',' + mi);
+  let matchLabel = 'Trận #' + matchNo;
+  if (customMatchKey && customMatchKey.startsWith('rr::')) {
+    const parts = customMatchKey.split('::');
+    matchLabel = parts[1] + ' - Trận ' + matchNo;
+  }
+  _assignTarget = { ri, mi, matchNo, matchLabel, vdv1, vdv2, matchKey };
   _assignSelected = null;
 
   document.getElementById('assignMatchInfo').innerHTML =
@@ -3272,8 +3324,7 @@ async function openAssignModal(ri, mi, matchNo, vdv1, vdv2) {
       return;
     }
     // Check existing assignment for this match
-    const matchKey = S._tournamentId + ':' + ri + ',' + mi;
-    const existing = assignments.find(a => a.match_key === ri+','+mi && a.tournament_id === S._tournamentId && a.status !== 'done');
+    const existing = assignments.find(a => a.match_key === matchKey && a.tournament_id === S._tournamentId && a.status !== 'done');
 
     listEl.innerHTML = refs.map(u => {
       const busy = assignments.find(a => a.referee === u.username && a.status === 'active');
@@ -3304,9 +3355,8 @@ function selectRef(username) {
 async function confirmAssign() {
   if (!_assignSelected) { alert('Vui lòng chọn trọng tài.'); return; }
   if (!_assignTarget) return;
-  const { ri, mi, matchNo, matchLabel, vdv1, vdv2 } = _assignTarget;
-  const matchKey = ri + ',' + mi;
-  const id = 'A' + S._tournamentId + '_' + matchKey.replace(',','_');
+  const { matchNo, matchLabel, vdv1, vdv2, matchKey } = _assignTarget;
+  const id = 'A' + S._tournamentId + '_' + matchKey.replace(/[^a-zA-Z0-9]/g,'_');
 
   showLoading('Đang phân công...');
   try {
@@ -3805,24 +3855,51 @@ async function refEndMatch() {
   if (!winner && !confirm('Tỉ số set hòa. Vẫn kết thúc trận?')) return;
 
   const asgn = REF.assignment;
-  const [riStr, miStr] = asgn.match_key.split(',');
-  const ri = parseInt(riStr), mi = parseInt(miStr);
+  const isRR = asgn.match_key.startsWith('rr::');
 
   showLoading('Đang lưu kết quả...');
   try {
     const tdata = await getTournamentData(asgn.tournament_id);
-    if (tdata) Object.assign(S, tdata);
-    S.knockoutResults[asgn.match_key] = {
-      s1: totalW1, s2: totalW2, winner,
-      w1: totalW1, w2: totalW2,
-      sets: REF.sets, shuttle: REF.shuttle,
-    };
-    if (winner) advanceKnockoutWinner(ri, mi, winner);
+    if (!tdata) { hideLoading(); alert('❌ Không tải được dữ liệu giải đấu.'); return; }
+
+    if (isRR) {
+      // match_key: rr::GroupName::pairIdx
+      const parts     = asgn.match_key.split('::');
+      const groupName = parts[1];
+      const pairIdx   = parseInt(parts[2]);
+      const key       = groupName + ':' + pairIdx;
+
+      // Merge tdata vào S trước (giống KO)
+      Object.assign(S, tdata);
+      S._tournamentId = asgn.tournament_id;
+      S.rrResults = S.rrResults || {};
+      S.rrResults[key] = {
+        s1: totalW1, s2: totalW2, winner,
+        w1: totalW1, w2: totalW2,
+        sets: REF.sets, shuttle: REF.shuttle,
+      };
+    } else {
+      // Knockout
+      const [riStr, miStr] = asgn.match_key.split(',');
+      const ri = parseInt(riStr), mi = parseInt(miStr);
+      Object.assign(S, tdata);
+      S._tournamentId = asgn.tournament_id;
+      S.knockoutResults[asgn.match_key] = {
+        s1: totalW1, s2: totalW2, winner,
+        w1: totalW1, w2: totalW2,
+        sets: REF.sets, shuttle: REF.shuttle,
+      };
+      if (winner) advanceKnockoutWinner(ri, mi, winner);
+    }
+
+    // Dùng buildSnapshot() giống hệt KO đang hoạt động tốt
     await saveTournamentData(asgn.tournament_id, buildSnapshot());
     await updateAssignmentStatus(asgn.id, 'done');
     await deleteLiveScore(REF.liveKey);
     clearRefState();
     hideLoading();
+    // Cập nhật giao diện (xếp hạng vòng tròn, bảng KO)
+    if (typeof renderContent === 'function') renderContent();
 
     // Xuất PDF biên bản trận
     // Lưu thời gian set cuối
@@ -4169,9 +4246,16 @@ function unsubscribeLiveScores() {
 }
 
 function updateLiveScoreBanner(matchKey, sd) {
-  // matchKey = "tournamentId:ri,mi"
-  const key = matchKey.split(':').slice(1).join(':'); // "ri,mi"
-  const safeKey = key.replace(',','_');
+  // matchKey = "tournamentId:ri,mi" (KO) or "tournamentId:rr::GroupName::pairIdx" (RR)
+  const key = matchKey.split(':').slice(1).join(':');
+  let safeKey;
+  if (key.startsWith('rr::')) {
+    // rr::GroupName::pairIdx → rr_GroupSafe_pairIdx  (đúng với rrSafeKey trong table)
+    const parts = key.split('::'); // ['rr', 'GroupName', 'pairIdx']
+    safeKey = 'rr_' + parts[1].replace(/[^a-zA-Z0-9]/g,'_') + '_' + parts[2];
+  } else {
+    safeKey = key.replace(',','_');
+  }
 
   // Find the score cell in the KO table row
   const scoreCell = document.getElementById('liveScore_' + safeKey);
@@ -4216,11 +4300,19 @@ const _pendingLiveScores = {};
 
 function applyPendingLiveScores() {
   Object.entries(_pendingLiveScores).forEach(([key, sd]) => {
-    const safeKey = key.replace(',','_');
+    let safeKey;
+    if (key.startsWith('rr::')) {
+      const parts = key.split('::');
+      safeKey = 'rr_' + parts[1].replace(/[^a-zA-Z0-9]/g,'_') + '_' + parts[2];
+    } else {
+      safeKey = key.replace(',','_');
+    }
     const scoreCell = document.getElementById('liveScore_' + safeKey);
     const row = document.getElementById('liveRow_' + safeKey);
     if (scoreCell) {
       renderLiveScoreCell(scoreCell, sd, key);
+      if (row) row.classList.add('live-row');
+      delete _pendingLiveScores[key];
     }
   });
 }
@@ -4228,12 +4320,18 @@ function applyPendingLiveScores() {
 function removeLiveScoreBanner(matchKey) {
   if (!matchKey) return;
   const key = matchKey.split(':').slice(1).join(':');
-  const safeKey = key.replace(',','_');
+  let safeKey;
+  if (key.startsWith('rr::')) {
+    const parts = key.split('::');
+    safeKey = 'rr_' + parts[1].replace(/[^a-zA-Z0-9]/g,'_') + '_' + parts[2];
+  } else {
+    safeKey = key.replace(',','_');
+  }
   const row = document.getElementById('liveRow_' + safeKey);
   if (row) row.classList.remove('live-row');
   delete _pendingLiveScores[key];
   delete _liveShuttles[key];
-  updateShuttleCounter(null, 0); // recalculate total
+  updateShuttleCounter(null, 0);
 }
 
 // Subscribe when tournament is loaded
