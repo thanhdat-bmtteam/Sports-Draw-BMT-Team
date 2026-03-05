@@ -1352,6 +1352,7 @@ function saveRefState() {
       firstReceiver: REF.firstReceiver,
       servingSide: REF.servingSide,
       playerPos: REF.playerPos,
+      serveHistory: REF.serveHistory,
       assignmentId: REF.assignment?.id,
     }));
   } catch(e) {}
@@ -1384,6 +1385,7 @@ function restoreRefState() {
     REF.firstReceiver = st.firstReceiver || null;
     REF.servingSide = st.servingSide || null;
     REF.playerPos = st.playerPos || null;
+    REF.serveHistory = st.serveHistory || [];
     return true;
   } catch(e) { return false; }
 }
@@ -3451,6 +3453,8 @@ const REF = {
   firstReceiver: null,
   playerPos: {},
   servingSide: null,
+  // Lịch sử serve state để rollback khi bấm trừ
+  serveHistory: [],  // [{s1, s2, servingSide, playerPos}] — snapshot trước mỗi điểm
   // Lịch sử điểm & thời gian set
   pointLog: [],      // [{set, s1, s2, scorer, serverName, receiverName, elapsed}]
   setTimes: [],      // [{setNo, duration}] giây
@@ -3652,6 +3656,7 @@ function refStart() {
   REF.pointLog = [];
   REF.setTimes = [];
   REF.setStartElapsed = 0;
+  REF.serveHistory = [];
   clearInterval(REF.timerInterval);
   REF.timerInterval = setInterval(() => {
     REF.elapsed++;
@@ -3677,24 +3682,23 @@ function refScore(displaySide, delta) {
   if (!REF.started) { alert('Nhấn Bắt đầu trận trước.'); return; }
   // displaySide 1=left 2=right, map to actual side depending on flip
   const actualSide = REF.flipped ? (displaySide === 1 ? 2 : 1) : displaySide;
-  if (actualSide === 1) REF.s1 = Math.max(0, REF.s1 + delta);
-  else                  REF.s2 = Math.max(0, REF.s2 + delta);
-  // Update serve rotation
+
   if (delta > 0) {
+    // Lưu snapshot serve state TRƯỚC khi cộng điểm (để rollback khi trừ)
+    REF.serveHistory.push({
+      s1: REF.s1, s2: REF.s2,
+      servingSide: REF.servingSide,
+      playerPos: REF.playerPos ? { ...REF.playerPos } : null,
+    });
+
+    if (actualSide === 1) REF.s1++;
+    else REF.s2++;
+
+    // Cập nhật serve rotation sau điểm
     if (REF.isDouble) updateServeAfterPoint(actualSide);
-    else {
-      // Đơn: bên thắng điểm = bên giao tiếp
-      REF.servingSide = 'side' + actualSide;
-    }
-  }
-  // Bump animation
-  const scoreEl = document.getElementById(displaySide === 1 ? 'refS1' : 'refS2');
-  if (delta > 0 && scoreEl) {
-    scoreEl.classList.add('bump');
-    setTimeout(() => scoreEl.classList.remove('bump'), 200);
-  }
-  // Log điểm vào lịch sử (chỉ khi cộng điểm)
-  if (delta > 0) {
+    else REF.servingSide = 'side' + actualSide;
+
+    // Log vào pointLog
     const serverKey   = REF.isDouble ? getServerKey()   : null;
     const receiverKey = REF.isDouble ? getReceiverKey() : null;
     function nameOf(key) {
@@ -3710,11 +3714,32 @@ function refScore(displaySide, delta) {
       s1: REF.s1, s2: REF.s2,
       scorer: 'side' + actualSide,
       scorerName: actualSide === 1 ? (REF.name1a || 'Bên trái') : (REF.name2a || 'Bên phải'),
-      serverName:   REF.isDouble ? nameOf(serverKey)   : (REF.servingSide === 'side'+actualSide ? (actualSide===1?REF.name1a:REF.name2a) : (actualSide===1?REF.name2a:REF.name1a)),
+      serverName:   REF.isDouble ? nameOf(serverKey) : (REF.servingSide === 'side'+actualSide ? (actualSide===1?REF.name1a:REF.name2a) : (actualSide===1?REF.name2a:REF.name1a)),
       receiverName: REF.isDouble ? nameOf(receiverKey) : null,
       elapsed: REF.elapsed,
     });
+
+    // Bump animation
+    const scoreEl = document.getElementById(displaySide === 1 ? 'refS1' : 'refS2');
+    if (scoreEl) { scoreEl.classList.add('bump'); setTimeout(() => scoreEl.classList.remove('bump'), 200); }
+
+  } else {
+    // Bấm trừ — rollback về snapshot trước đó
+    const prev = REF.serveHistory.pop();
+    if (prev) {
+      REF.s1          = prev.s1;
+      REF.s2          = prev.s2;
+      REF.servingSide = prev.servingSide;
+      REF.playerPos   = prev.playerPos;
+    } else {
+      // Không có history → chỉ giảm điểm, không về âm
+      if (actualSide === 1) REF.s1 = Math.max(0, REF.s1 - 1);
+      else REF.s2 = Math.max(0, REF.s2 - 1);
+    }
+    // Xóa pointLog cuối
+    if (REF.pointLog.length > 0) REF.pointLog.pop();
   }
+
   updateRefUI();
   pushLiveScore(); saveRefState();
 }
