@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BMT – Phần mềm Bốc thăm Thi đấu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500;600&family=Be+Vietnam+Pro:wght@700;800;900&subset=vietnamese&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -984,6 +987,7 @@
     <button class="auth-btn" onclick="doLogin()">Đăng nhập</button>
     <div class="auth-sep">── hoặc ──</div>
     <button class="auth-guest-btn" onclick="showGuestSelector()">👁️ Xem giải đấu (Khách)</button>
+    <button class="auth-guest-btn" style="margin-top:8px;background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#93c5fd" onclick="openScreenScore()">📺 Screen Score (TV / Màn hình sân)</button>
   </div>
   <div class="auth-box" id="guestBox" style="display:none">
     <h2>👁️ CHỌN GIẢI ĐẤU ĐỂ XEM</h2>
@@ -3318,6 +3322,13 @@ async function openAssignModal(ri, mi, matchNo, vdv1, vdv2, customMatchKey) {
     matchLabel = parts[1] + ' - Trận ' + matchNo;
   }
   _assignTarget = { ri, mi, matchNo, matchLabel, vdv1, vdv2, matchKey };
+  // Tìm sân từ schedule
+  const schedMatch = (S.schedule || []).find(r => {
+    if (customMatchKey) return false; // RR không có trong schedule chuẩn
+    const rKey = r.ri + ',' + r.mi;
+    return rKey === matchKey;
+  });
+  _assignTarget.san = schedMatch?.san || null;
   _assignSelected = null;
 
   document.getElementById('assignMatchInfo').innerHTML =
@@ -3372,7 +3383,7 @@ function selectRef(username) {
 async function confirmAssign() {
   if (!_assignSelected) { alert('Vui lòng chọn trọng tài.'); return; }
   if (!_assignTarget) return;
-  const { matchNo, matchLabel, vdv1, vdv2, matchKey } = _assignTarget;
+  const { matchNo, matchLabel, vdv1, vdv2, matchKey, san } = _assignTarget;
   const id = 'A' + S._tournamentId + '_' + matchKey.replace(/[^a-zA-Z0-9]/g,'_');
 
   showLoading('Đang phân công...');
@@ -3417,6 +3428,23 @@ async function checkAndShowRefScreen() {
     REF.liveKey = assignment.tournament_id + ':' + assignment.match_key;
     const tdata = await getTournamentData(assignment.tournament_id);
     if (tdata) { Object.assign(S, tdata); S._tournamentId = assignment.tournament_id; }
+
+    // Lấy san từ schedule (không lưu trong assignments table)
+    if (!assignment.san) {
+      const mk = assignment.match_key;
+      if (mk.startsWith('rr::')) {
+        // RR: rr::GroupName::pairIdx — tìm trong schedule RR
+        const parts = mk.split('::');
+        const gName = parts[1];
+        const pairIdx = parseInt(parts[2]);
+        const schedItem = (S.schedule || []).find(r => r.group === gName && r.pairIdx === pairIdx);
+        if (schedItem?.san) assignment.san = String(schedItem.san);
+      } else {
+        // KO: ri,mi
+        const schedItem = (S.schedule || []).find(r => (r.ri + ',' + r.mi) === mk);
+        if (schedItem?.san) assignment.san = String(schedItem.san);
+      }
+    }
 
     // Khôi phục trạng thái chấm điểm nếu có
     const restored = restoreRefState();
@@ -4218,6 +4246,7 @@ async function pushLiveScore() {
     sets: REF.sets, elapsed: REF.elapsed,
     vdv1: REF.assignment?.vdv1, vdv2: REF.assignment?.vdv2,
     shuttle: REF.shuttle,
+    san: REF.assignment?.san || null,
   };
   await saveLiveScore(REF.liveKey, REF.assignment?.tournament_id, scoreData);
 }
@@ -4400,6 +4429,11 @@ function onTournamentLoaded(tid) {
 
 window.addEventListener('DOMContentLoaded', () => {
   onModeChange();
+  // Tự động khôi phục Screen Score nếu F5
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('bmt_ss') || 'null');
+    if (saved?.tid && saved?.court) openScreenScore();
+  } catch(e) {}
   initAuth();
 });
 </script>
@@ -4534,5 +4568,351 @@ window.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+<!-- ══════════════ SCREEN SCORE OVERLAY ══════════════ -->
+<div id="screenScoreOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:#080b10;flex-direction:column;font-family:'Barlow Condensed',sans-serif;">
+
+  <!-- Setup panel -->
+  <div id="ssSetup" style="display:flex;align-items:center;justify-content:center;height:100vh">
+    <div style="background:#0e1420;border:1px solid rgba(255,255,255,.08);border-top:3px solid #f97316;border-radius:16px;padding:44px 48px;width:440px;box-shadow:0 30px 80px rgba(0,0,0,.7)">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:32px">
+        <div style="width:46px;height:46px;border-radius:11px;background:#f97316;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;color:#fff;letter-spacing:-1px">BMT</div>
+        <div>
+          <div style="font-size:20px;font-weight:700;letter-spacing:1px;color:#f0f4ff">SCREEN <span style="color:#f97316">SCORE</span></div>
+          <div style="font-size:11px;color:#6b7a9a;letter-spacing:1px">Màn hình điểm số sân đấu</div>
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#6b7a9a;text-transform:uppercase;margin-bottom:6px">Giải đấu</div>
+      <select id="ssTournament" style="width:100%;padding:11px 14px;background:#080b10;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:#f0f4ff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;margin-bottom:18px;outline:none;cursor:pointer" onchange="ssLoadCourts(this.value)">
+        <option value="">⏳ Đang tải...</option>
+      </select>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:#6b7a9a;text-transform:uppercase;margin-bottom:6px">Sân thi đấu</div>
+      <select id="ssCourt" style="width:100%;padding:11px 14px;background:#080b10;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:#f0f4ff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;margin-bottom:24px;outline:none;cursor:pointer">
+        <option value="">— Chọn giải trước —</option>
+      </select>
+
+      <button onclick="ssStart()" style="width:100%;padding:13px;background:#f97316;border:none;border-radius:9px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(249,115,22,.4)">▶  BẮT ĐẦU HIỂN THỊ</button>
+      <button onclick="closeScreenScore()" style="width:100%;padding:10px;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:#6b7a9a;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:10px">✕ Đóng</button>
+    </div>
+  </div>
+
+  <!-- Live display -->
+  <div id="ssDisplay" style="display:none;flex-direction:column;height:100vh">
+
+    <!-- Top bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 36px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(8,11,16,.95);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 14px rgba(249,115,22,.4)">🏟</div>
+        <div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:3px;color:#6b7a9a;text-transform:uppercase">SÂN THI ĐẤU</div>
+          <div id="ssCourtName" style="font-size:24px;font-weight:900;color:#f0f4ff;line-height:1;letter-spacing:1px">—</div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div id="ssTournamentName" style="font-size:18px;font-weight:700;color:#f97316;letter-spacing:2px;text-transform:uppercase">—</div>
+        <div id="ssClock" style="font-size:13px;color:#6b7a9a;margin-top:2px;letter-spacing:2px">—</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="ssDot" style="width:8px;height:8px;border-radius:50%;background:#6b7a9a"></div>
+        <span id="ssStatusTxt" style="font-size:13px;font-weight:600;color:#6b7a9a">Chờ trận</span>
+        <button onclick="ssBackToSetup()" style="margin-left:12px;background:transparent;border:1px solid rgba(255,255,255,.1);border-radius:7px;color:#6b7a9a;padding:5px 12px;font-size:12px;font-family:'Barlow Condensed',sans-serif;cursor:pointer;font-weight:600">← Chọn lại</button>
+      </div>
+    </div>
+
+    <!-- Score area -->
+    <div id="ssScoreArea" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:20px 40px;gap:14px">
+      <!-- idle by default -->
+    </div>
+
+    <!-- Bottom bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 36px;border-top:1px solid rgba(255,255,255,.07);background:rgba(8,11,16,.95);flex-shrink:0">
+      <div style="display:flex;gap:20px;font-size:13px;font-weight:600;color:#6b7a9a">
+        <span id="ssSetInfo"></span>
+        <span id="ssShuttle"></span>
+      </div>
+      <div style="font-size:11px;color:rgba(107,122,154,.4);letter-spacing:1px">BMT TOURNAMENT SYSTEM</div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes ss-bump { 0%{transform:scale(1)} 50%{transform:scale(1.15);color:#fbbf24} 100%{transform:scale(1)} }
+@keyframes ss-idle-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+@keyframes ss-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+@keyframes ss-shuttle { 0%,100%{transform:translateY(-50%) rotate(-15deg)} 50%{transform:translateY(-62%) rotate(10deg)} }
+.ss-serving-shuttle {
+  content:'🏸'; position:absolute; left:16px; top:50%;
+  transform:translateY(-50%) rotate(-15deg);
+  font-size:20px; animation:ss-shuttle 1.2s ease-in-out infinite;
+}
+</style>
+
+<script>
+/* ═══════════ SCREEN SCORE ═══════════ */
+const SS = { tid: null, court: null, channel: null, liveData: null };
+
+function openScreenScore() {
+  document.getElementById('screenScoreOverlay').style.display = 'flex';
+  ssLoadTournaments();
+  ssClock();
+  setInterval(ssClock, 1000);
+
+  // Khôi phục từ sessionStorage nếu có (F5 không mất)
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('bmt_ss') || 'null');
+    if (saved?.tid && saved?.court) {
+      SS.tid = saved.tid; SS.court = saved.court;
+      const courtLabel = /^s[aâ]n\s*/i.test(saved.court) ? saved.court : 'Sân ' + saved.court;
+      document.getElementById('ssCourtName').textContent = courtLabel;
+      document.getElementById('ssTournamentName').textContent = saved.tName || saved.tid;
+      document.getElementById('ssSetup').style.display = 'none';
+      document.getElementById('ssDisplay').style.display = 'flex';
+      ssSubscribe(saved.tid, saved.court);
+      ssFetch(saved.tid, saved.court);
+      return;
+    }
+  } catch(e) {}
+}
+
+function closeScreenScore() {
+  if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
+  document.getElementById('screenScoreOverlay').style.display = 'none';
+}
+
+function ssClock() {
+  const n = new Date();
+  const t = [n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+  const el = document.getElementById('ssClock');
+  if (el) el.textContent = t;
+}
+
+async function ssLoadTournaments() {
+  const sel = document.getElementById('ssTournament');
+  try {
+    const { data } = await getDB().from('bmt_tournaments').select('*').order('created_at',{ascending:false});
+    if (!data?.length) { sel.innerHTML = '<option value="">Không có giải đấu</option>'; return; }
+    sel.innerHTML = '<option value="">— Chọn giải đấu —</option>' +
+      data.map(t=>`<option value="${t.id}">${t.name||t.id}</option>`).join('');
+  } catch(e) { sel.innerHTML = '<option value="">Lỗi kết nối</option>'; }
+}
+
+async function ssLoadCourts(tid) {
+  const sel = document.getElementById('ssCourt');
+  if (!tid) { sel.innerHTML = '<option value="">— Chọn giải trước —</option>'; return; }
+  sel.innerHTML = '<option value="">⏳ Đang tải sân...</option>';
+  try {
+    const { data } = await getDB().from('bmt_tournament_data').select('data').eq('tournament_id',tid).single();
+    const courts = new Set();
+    (data?.data?.schedule||[]).forEach(r => { if(r.san) courts.add(String(r.san)); });
+    if (!courts.size) {
+      sel.innerHTML = '<option value="all">Tất cả sân</option>';
+    } else {
+      const sorted = [...courts].sort((a,b)=>{ const na=parseInt(a),nb=parseInt(b); return isNaN(na)?a.localeCompare(b):na-nb; });
+      sel.innerHTML = '<option value="">— Chọn sân —</option>' + sorted.map(c=>{
+        // Tránh double "Sân Sân X" nếu tên sân đã có chữ "Sân"
+        const label = /^s[aâ]n\s*/i.test(c) ? c : 'Sân ' + c;
+        return `<option value="${c}">${label}</option>`;
+      }).join('');
+    }
+  } catch(e) { sel.innerHTML = '<option value="">Lỗi tải dữ liệu</option>'; }
+}
+
+async function ssStart() {
+  const tid   = document.getElementById('ssTournament').value;
+  const court = document.getElementById('ssCourt').value;
+  if (!tid)   { alert('Vui lòng chọn giải đấu.'); return; }
+  if (!court) { alert('Vui lòng chọn sân.'); return; }
+
+  SS.tid = tid; SS.court = court;
+
+  const tSel = document.getElementById('ssTournament');
+  const tName = tSel.options[tSel.selectedIndex]?.text || tid;
+  // Lưu vào sessionStorage để F5 không mất
+  try { sessionStorage.setItem('bmt_ss', JSON.stringify({ tid, court, tName })); } catch(e) {}
+
+  const courtLabel = /^s[aâ]n\s*/i.test(court) ? court : 'Sân ' + court;
+  document.getElementById('ssCourtName').textContent = courtLabel;
+  document.getElementById('ssTournamentName').textContent = tName;
+
+  document.getElementById('ssSetup').style.display = 'none';
+  document.getElementById('ssDisplay').style.display = 'flex';
+
+  ssSubscribe(tid, court);
+  await ssFetch(tid, court);
+}
+
+function ssBackToSetup() {
+  if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
+  SS.liveData = null;
+  try { sessionStorage.removeItem('bmt_ss'); } catch(e) {}
+  document.getElementById('ssDisplay').style.display = 'none';
+  document.getElementById('ssSetup').style.display = 'flex';
+  ssSetIdle();
+}
+
+function ssSubscribe(tid, court) {
+  if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} }
+  SS.channel = getDB()
+    .channel('ss-' + tid + '-' + court)
+    .on('postgres_changes', { event:'*', schema:'public', table:'bmt_live_scores', filter:'tournament_id=eq.'+tid }, payload => {
+      if (payload.eventType === 'DELETE') {
+        if (SS.liveData && payload.old?.match_key === SS.liveData._mk) {
+          ssShowEnded(SS.liveData);
+          setTimeout(() => { SS.liveData = null; ssSetIdle(); }, 9000);
+        }
+        return;
+      }
+      if (payload.new?.score_data) {
+        const sd = payload.new.score_data;
+        if (ssIsOurCourt(sd)) {
+          SS.liveData = { ...sd, _mk: payload.new.match_key };
+          ssRender(SS.liveData);
+        }
+      }
+    })
+    .subscribe();
+}
+
+async function ssFetch(tid, court) {
+  try {
+    const { data } = await getDB().from('bmt_live_scores').select('*').eq('tournament_id', tid);
+    if (!data) { ssSetIdle(); return; }
+    const match = data.find(r => r.score_data && ssIsOurCourt(r.score_data));
+    if (match) {
+      SS.liveData = { ...match.score_data, _mk: match.match_key };
+      ssRender(SS.liveData);
+    } else { ssSetIdle(); }
+  } catch(e) { ssSetIdle(); }
+}
+
+function ssIsOurCourt(sd) {
+  const c = String(sd.san ?? sd.court ?? '').trim();
+  return c === String(SS.court).trim();
+}
+
+function ssSetStatus(live) {
+  const dot  = document.getElementById('ssDot');
+  const stxt = document.getElementById('ssStatusTxt');
+  if (!dot || !stxt) return;
+  if (live === 'active') {
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#22c55e;animation:ss-pulse 2s infinite';
+    stxt.style.color = '#22c55e'; stxt.textContent = 'Đang diễn ra';
+  } else if (live === 'ended') {
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fbbf24;animation:none';
+    stxt.style.color = '#fbbf24'; stxt.textContent = 'Trận kết thúc';
+  } else {
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#6b7a9a;animation:none';
+    stxt.style.color = '#6b7a9a'; stxt.textContent = 'Chờ trận';
+  }
+}
+
+function ssRender(sd) {
+  const area = document.getElementById('ssScoreArea');
+  if (!area) return;
+  ssSetStatus('active');
+
+  const s1 = sd.s1 ?? 0, s2 = sd.s2 ?? 0;
+  const w1 = sd.w1 ?? 0, w2 = sd.w2 ?? 0;
+  const sets = sd.sets || [];
+  const setNo = sets.length + 1;
+  const vdv1 = sd.vdv1 || 'VĐV 1';
+  const vdv2 = sd.vdv2 || 'VĐV 2';
+  const p1win = w1 > w2 || (w1 === w2 && s1 > s2);
+  const p2win = w2 > w1 || (w1 === w2 && s2 > s1);
+
+  function setScoresCols(p) {
+    // Hiển thị set đã kết thúc (nhỏ)
+    let h = '';
+    sets.forEach((set,i) => {
+      const my = p===1?set.s1:set.s2, op = p===1?set.s2:set.s1;
+      const won = my > op;
+      h += `<div style="display:flex;flex-direction:column;align-items:center;padding:8px 14px;border-left:1px solid rgba(255,255,255,.07);min-width:46px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#6b7a9a;margin-bottom:3px">S${i+1}</div>
+        <div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:${won?'#f97316':'#6b7a9a'};line-height:1">${my}</div>
+      </div>`;
+    });
+    return h;
+  }
+
+  function playerRow(name, p, isWin) {
+    const accentColor = isWin ? '#fbbf24' : '#f0f4ff';
+    const borderColor = isWin ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.07)';
+    const glowColor   = isWin ? 'rgba(251,191,36,.12)' : 'transparent';
+    const currentScore = p === 1 ? s1 : s2;
+    const setsWon      = p === 1 ? w1 : w2;
+    const winBar = isWin ? '<div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#fbbf24;border-radius:4px 0 0 4px"></div>' : '';
+    const padLeft = isWin ? '26px' : '20px';
+    const setWonColor = isWin ? '#f97316' : '#6b7a9a';
+    const scoreColor  = isWin ? '#fbbf24' : '#f0f4ff';
+    return '<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;background:#0e1420;border:1px solid ' + borderColor + ';border-radius:14px;overflow:hidden;position:relative;box-shadow:0 6px 30px ' + glowColor + ';transition:all .3s">'
+      + winBar
+      + '<div style="padding:28px 20px 28px ' + padLeft + ';min-width:0;overflow:hidden">'
+      + '<div style="font-family:\'Be Vietnam Pro\',sans-serif;font-size:clamp(22px,3.5vw,48px);font-weight:900;letter-spacing:0px;color:' + accentColor + ';line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</div>'
+      + '</div>'
+      + '<div style="display:flex;border-left:1px solid rgba(255,255,255,.07)">' + setScoresCols(p) + '</div>'
+      + '<div style="display:flex;align-items:center;border-left:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.3)">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;padding:8px 14px;border-right:1px solid rgba(255,255,255,.07)">'
+      + '<div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#6b7a9a;margin-bottom:3px">SET</div>'
+      + '<div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:' + setWonColor + ';line-height:1">' + setsWon + '</div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;justify-content:center;min-width:clamp(90px,11vw,140px);padding:0 20px">'
+      + '<div id="ssMain' + p + '" style="font-family:\'Barlow Condensed\',sans-serif;font-size:clamp(56px,9vw,110px);font-weight:900;color:' + scoreColor + ';line-height:1">' + currentScore + '</div>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  area.innerHTML = `
+    <div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase;margin-bottom:-4px">SET ${setNo} · ĐANG DIỄN RA</div>
+    ${playerRow(vdv1, 1, p1win)}
+    <div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:rgba(107,122,154,.5)">
+      <span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-right:10px"></span>
+      VS
+      <span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-left:10px"></span>
+    </div>
+    ${playerRow(vdv2, 2, p2win)}
+  `;
+
+  document.getElementById('ssSetInfo').textContent = `Set ${setNo}  ·  ${w1}–${w2} set`;
+  document.getElementById('ssShuttle').textContent = sd.shuttle != null ? `🏸 ${sd.shuttle} lần thay cầu` : '';
+}
+
+function ssShowEnded(sd) {
+  const area = document.getElementById('ssScoreArea');
+  if (!area) return;
+  ssSetStatus('ended');
+  const w1 = sd.w1 ?? 0, w2 = sd.w2 ?? 0;
+  const winner = w1 > w2 ? sd.vdv1 : sd.vdv2;
+  area.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;flex:1">
+      <div style="background:#0e1420;border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:48px 64px;text-align:center;box-shadow:0 20px 60px rgba(251,191,36,.1)">
+        <div style="font-size:72px;margin-bottom:12px">🏆</div>
+        <div style="font-size:clamp(36px,6vw,72px);font-weight:900;color:#fbbf24;letter-spacing:2px;line-height:1">${winner || 'KẾT THÚC'}</div>
+        <div style="font-size:18px;color:#6b7a9a;letter-spacing:3px;text-transform:uppercase;margin-top:10px">THẮNG ${w1}–${w2} SET</div>
+      </div>
+    </div>`;
+  document.getElementById('ssSetInfo').textContent = '';
+  document.getElementById('ssShuttle').textContent = '';
+}
+
+function ssCourtLabel(c) {
+  return /^s[aâ]n\s*/i.test(c||'') ? c : 'Sân ' + (c||'');
+}
+
+function ssSetIdle() {
+  const area = document.getElementById('ssScoreArea');
+  if (!area) return;
+  ssSetStatus('idle');
+  const courtTxt = ssCourtLabel(SS.court);
+  area.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1">
+      <div style="font-size:80px;animation:ss-idle-float 3s ease-in-out infinite">🏸</div>
+      <div style="font-size:28px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase">Chờ trận đấu</div>
+      <div style="font-size:15px;color:rgba(107,122,154,.5)">${courtTxt} chưa có trận đang diễn ra</div>
+    </div>`;
+  document.getElementById('ssSetInfo').textContent = '';
+  document.getElementById('ssShuttle').textContent = '';
+}
+</script>
 </body>
-</html>
