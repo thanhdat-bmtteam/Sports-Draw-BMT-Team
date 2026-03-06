@@ -732,6 +732,22 @@
 
   /* Action buttons */
   .ref-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn-call-shuttle {
+    padding: 11px; border-radius: 8px; border: none;
+    background: rgba(34,197,94,.15); color: #22c55e;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 13px; cursor: pointer; transition: all .15s;
+  }
+  .btn-call-shuttle:hover { background: rgba(34,197,94,.3); }
+  .btn-call-shuttle:active { transform: scale(.96); }
+  .btn-call-chief {
+    padding: 11px; border-radius: 8px; border: none;
+    background: rgba(251,191,36,.15); color: #fbbf24;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 13px; cursor: pointer; transition: all .15s;
+  }
+  .btn-call-chief:hover { background: rgba(251,191,36,.3); }
+  .btn-call-chief:active { transform: scale(.96); }
   .btn-end-set {
     padding: 13px; border-radius: 8px; border: none;
     background: rgba(59,130,246,.2); color: var(--accent2);
@@ -3454,6 +3470,8 @@ async function checkAndShowRefScreen() {
       document.getElementById('refMatchLabel').textContent = assignment.match_label || 'Trận đấu';
       document.getElementById('refShuttleCount').textContent = REF.shuttle;
       document.getElementById('refActionBtns').innerHTML = `
+        <button class="btn-call-shuttle" onclick="refCallHelp('shuttle')">🏸 Thêm cầu</button>
+        <button class="btn-call-chief" onclick="refCallHelp('chief')">📣 Tổng trọng tài</button>
         <button class="btn-end-set" onclick="refEndSet()">⏹ Kết thúc Set</button>
         <button class="btn-end-match" onclick="refEndMatch()">🏁 Kết thúc Trận</button>
       `;
@@ -3708,6 +3726,8 @@ function refStart() {
     document.getElementById('refTimer').textContent = m + ':' + s;
   }, 1000);
   document.getElementById('refActionBtns').innerHTML = `
+    <button class="btn-call-shuttle" onclick="refCallHelp('shuttle')">🏸 Thêm cầu</button>
+    <button class="btn-call-chief" onclick="refCallHelp('chief')">📣 Tổng trọng tài</button>
     <button class="btn-end-set" onclick="refEndSet()">⏹ Kết thúc Set</button>
     <button class="btn-end-match" onclick="refEndMatch()">🏁 Kết thúc Trận</button>
   `;
@@ -3785,6 +3805,80 @@ function refScore(displaySide, delta) {
 
   updateRefUI();
   pushLiveScore(); saveRefState();
+}
+
+
+// ── Gọi hỗ trợ ──────────────────────────
+async function refCallHelp(type) {
+  const asgn = REF.assignment;
+  if (!asgn) return;
+  const san = asgn.san ? 'Sân ' + asgn.san : (asgn.match_label || 'Trọng tài');
+  const msg = type === 'shuttle'
+    ? san + ' gọi thêm cầu 🏸'
+    : san + ' gọi Tổng trọng tài 📣';
+
+  const btnClass = type === 'shuttle' ? 'btn-call-shuttle' : 'btn-call-chief';
+  const btn = document.querySelector('.' + btnClass);
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Đã gửi!';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  }
+  try {
+    await getDB().from('bmt_notifications').insert({
+      tournament_id: asgn.tournament_id,
+      type, message: msg,
+      san: asgn.san || null,
+      referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || 'Trọng tài',
+      created_at: new Date().toISOString(),
+      read: false,
+    });
+  } catch(e) { console.warn('refCallHelp:', e); }
+}
+
+let _notifChannel = null;
+
+function subscribeToNotifications(tid) {
+  if (!tid || !['admin','user_vip','user_basic'].includes(AUTH.currentUser?.role)) return;
+  if (_notifChannel) { try { getDB().removeChannel(_notifChannel); } catch(e){} }
+  _notifChannel = getDB()
+    .channel('notif-' + tid)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public',
+      table: 'bmt_notifications', filter: 'tournament_id=eq.' + tid
+    }, payload => { if (payload.new?.message) showNotifToast(payload.new); })
+    .subscribe();
+}
+
+function showNotifToast(notif) {
+  const existing = document.getElementById('notifToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'notifToast';
+  const isChief = notif.type === 'chief';
+  toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:' + (isChief ? '#4c1d95' : '#064e3b') + ';border:2px solid ' + (isChief ? '#a855f7' : '#22c55e') + ';border-radius:14px;padding:16px 18px;box-shadow:0 8px 40px rgba(0,0,0,.7);display:flex;align-items:flex-start;gap:12px;max-width:340px;cursor:pointer;animation:toast-in .3s ease-out';
+  toast.innerHTML = '<div style="font-size:32px;line-height:1">' + (isChief ? '📣' : '🏸') + '</div>'
+    + '<div style="flex:1"><div style="font-weight:700;font-size:15px;color:#fff;margin-bottom:4px">' + (isChief ? '📣 Gọi Tổng trọng tài' : '🏸 Gọi thêm cầu') + '</div>'
+    + '<div style="font-size:14px;color:rgba(255,255,255,.9)">' + notif.message + '</div>'
+    + '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:4px">TT: ' + (notif.referee || '') + '</div></div>'
+    + '<div style="color:rgba(255,255,255,.4);font-size:18px;padding:0 4px" onclick="event.stopPropagation();this.closest(\'[id=notifToast]\').remove()">✕</div>';
+  if (!document.getElementById('toastStyle')) {
+    const s = document.createElement('style'); s.id = 'toastStyle';
+    s.textContent = '@keyframes toast-in{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(toast);
+  toast.onclick = () => toast.remove();
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, isChief ? 15000 : 10000);
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = isChief ? 880 : 660;
+    gain.gain.setValueAtTime(.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .6);
+    osc.start(); osc.stop(ctx.currentTime + .6);
+  } catch(e) {}
 }
 
 function refShuttle(delta) {
@@ -4425,6 +4519,7 @@ function removeLiveScoreBanner(matchKey) {
 // Subscribe when tournament is loaded
 function onTournamentLoaded(tid) {
   if (tid) subscribeToLiveScores(tid);
+  if (tid) subscribeToNotifications(tid);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -4569,7 +4664,7 @@ window.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <!-- ══════════════ SCREEN SCORE OVERLAY ══════════════ -->
-<div id="screenScoreOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:#080b10;flex-direction:column;font-family:'Barlow Condensed',sans-serif;">
+<div id="screenScoreOverlay" style="display:none;position:fixed;inset:0;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:9999;background:#080b10;flex-direction:column;font-family:'Barlow Condensed',sans-serif;">
 
   <!-- Setup panel -->
   <div id="ssSetup" style="display:flex;align-items:center;justify-content:center;height:100vh">
@@ -4652,8 +4747,20 @@ window.addEventListener('DOMContentLoaded', () => {
 /* ═══════════ SCREEN SCORE ═══════════ */
 const SS = { tid: null, court: null, channel: null, liveData: null };
 
+// Helper hiển thị/ẩn tương thích TV browser
+function ssShow(id, flexDir) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.setProperty('display', flexDir || 'flex', 'important');
+}
+function ssHide(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.setProperty('display', 'none', 'important');
+}
+
 function openScreenScore() {
-  document.getElementById('screenScoreOverlay').style.display = 'flex';
+  ssShow('screenScoreOverlay');
   ssLoadTournaments();
   ssClock();
   setInterval(ssClock, 1000);
@@ -4666,8 +4773,8 @@ function openScreenScore() {
       const courtLabel = /^s[aâ]n\s*/i.test(saved.court) ? saved.court : 'Sân ' + saved.court;
       document.getElementById('ssCourtName').textContent = courtLabel;
       document.getElementById('ssTournamentName').textContent = saved.tName || saved.tid;
-      document.getElementById('ssSetup').style.display = 'none';
-      document.getElementById('ssDisplay').style.display = 'flex';
+      ssHide('ssSetup');
+      ssShow('ssDisplay');
       ssSubscribe(saved.tid, saved.court);
       ssFetch(saved.tid, saved.court);
       return;
@@ -4677,7 +4784,7 @@ function openScreenScore() {
 
 function closeScreenScore() {
   if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
-  document.getElementById('screenScoreOverlay').style.display = 'none';
+  ssHide('screenScoreOverlay');
 }
 
 function ssClock() {
@@ -4735,8 +4842,8 @@ async function ssStart() {
   document.getElementById('ssCourtName').textContent = courtLabel;
   document.getElementById('ssTournamentName').textContent = tName;
 
-  document.getElementById('ssSetup').style.display = 'none';
-  document.getElementById('ssDisplay').style.display = 'flex';
+  ssHide('ssSetup');
+  ssShow('ssDisplay');
 
   ssSubscribe(tid, court);
   await ssFetch(tid, court);
@@ -4746,8 +4853,8 @@ function ssBackToSetup() {
   if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
   SS.liveData = null;
   try { sessionStorage.removeItem('bmt_ss'); } catch(e) {}
-  document.getElementById('ssDisplay').style.display = 'none';
-  document.getElementById('ssSetup').style.display = 'flex';
+  ssHide('ssDisplay');
+  ssShow('ssSetup');
   ssSetIdle();
 }
 
