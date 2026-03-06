@@ -3207,6 +3207,21 @@ async function exportPDF(mode) {
     for (let p = 1; p <= total; p++) { doc.setPage(p); drawFooter(p, total); }
   }
 
+  // Watermark cho user_basic
+  if (can('watermark')) {
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      try { doc.setGState(doc.GState({ opacity: 0.07 })); } catch(e) {}
+      doc.setFontSize(44);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(160, 160, 160);
+      const wmPos = [{x:25,y:90},{x:90,y:145},{x:25,y:200},{x:90,y:255}];
+      wmPos.forEach(pt => doc.text('BMT Team', pt.x, pt.y, { angle: 40 }));
+      try { doc.setGState(doc.GState({ opacity: 1 })); } catch(e) {}
+    }
+  }
+
   const suffix = S.mode === 'knockout' ? 'SoDo_Bracket' : 'ChiaBang';
   doc.save(`BMT_${suffix}_${new Date().toISOString().slice(0,10)}.pdf`);
 }
@@ -4164,10 +4179,29 @@ function generateMatchPDF(matchData) {
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    // Watermark cho user_basic
+    if (can('watermark')) {
+      try {
+        // jsPDF 2.x hỗ trợ GState với opacity
+        const gs = doc.GState({ opacity: 0.08, 'stroke-opacity': 0.08 });
+        doc.setGState(gs);
+      } catch(e) { /* fallback: không set opacity */ }
+      doc.setFontSize(46);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(180, 180, 180);
+      const wmPos = [{x:25,y:95},{x:85,y:150},{x:25,y:205},{x:85,y:260}];
+      wmPos.forEach(p => doc.text('BMT BASIC', p.x, p.y, { angle: 40 }));
+      try { doc.setGState(doc.GState({ opacity: 1 })); } catch(e) {}
+      // Reset màu text về normal
+      doc.setTextColor(...C.muted);
+    }
+
     doc.setFillColor(...C.dark);
     doc.rect(0, 288, W, 9, 'F');
     doc.setTextColor(...C.muted);
     doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
     doc.text('BMT Tournament System  |  ' + new Date().toLocaleDateString('vi-VN'), margin, 293.5);
     doc.text('Trang ' + i + '/' + pageCount, W - margin, 293.5, { align: 'right' });
   }
