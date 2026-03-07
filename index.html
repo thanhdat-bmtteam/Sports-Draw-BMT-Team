@@ -1157,6 +1157,7 @@
     <div class="section-title">🏆 Giải đấu</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button class="btn btn-secondary btn-sm" id="btnSaveTournamentSidebar" onclick="openTournamentModal()" style="display:none">🏆 Lưu / Tải giải đấu</button>
+      <button class="btn btn-sm" id="btnSaveOverSidebar" onclick="saveOverTournament()" style="display:none;background:rgba(34,197,94,.15);color:#22c55e;border-color:rgba(34,197,94,.35)">💾 Lưu đè giải hiện tại</button>
       <button class="btn btn-secondary btn-sm" id="btnAdminSidebar" onclick="openAdminModal()" style="display:none">⚙️ Quản trị hệ thống</button>
     </div>
   </div>
@@ -1326,6 +1327,7 @@ async function initAuth() {
               document.getElementById('knockoutActions').style.display = S.mode === 'knockout' ? 'block' : 'none';
               document.getElementById('roundrobinActions').style.display = S.mode === 'roundrobin' ? 'block' : 'none';
               applyPermissions();
+              lockBocTham();
             }
           }).catch(() => { hideLoading(); });
         }
@@ -1455,8 +1457,14 @@ async function doLogin() {
 }
 
 // Reset bốc thăm mới - KHÔNG đăng xuất, giữ nguyên phiên đăng nhập
+function lockBocTham() {
+  const btn = document.querySelector("button[onclick='bocTham()']");
+  if (btn) { btn.disabled = true; btn.innerHTML = '🔒 Đã bốc thăm'; btn.title = 'Giải đã được tải — khóa bốc thăm mới.'; }
+  const tp = document.getElementById('txtPlayers'); if (tp) tp.disabled = true;
+  const sm = document.getElementById('selMode'); if (sm) sm.disabled = true;
+}
+
 function resetDraw() {
-  if (!confirm('Bắt đầu bốc thăm mới? Dữ liệu hiện tại chưa lưu sẽ mất.')) return;
   S.mode = 'knockout'; S.players = []; S.knockoutSlots = []; S.knockoutRounds = [];
   S.knockoutMatchNos = {}; S.knockoutResults = {}; S.groups = []; S.pairsByGroup = {};
   S.rrResults = {}; S.schedule = []; S.scheduleType = null; S.showRRSchedule = false;
@@ -1533,6 +1541,7 @@ async function enterAsGuest(id) {
     renderContent();
     onTournamentLoaded(id);
     applyPermissions();
+    lockBocTham();
     if (S.mode === 'knockout') {
       document.getElementById('knockoutActions').style.display = 'none';
       document.getElementById('roundrobinActions').style.display = 'none';
@@ -1603,6 +1612,12 @@ function applyPermissions() {
   if (role === 'guest') {
     sidebar.querySelectorAll('input, select, textarea').forEach(el => el.setAttribute('disabled','true'));
   }
+
+  // Nút lưu đè — chỉ admin, chỉ khi có giải đang mở
+  const btnSaveOver = document.getElementById('btnSaveOverSidebar');
+  if (btnSaveOver) {
+    btnSaveOver.style.display = (role === 'admin' && S._tournamentId) ? 'block' : 'none';
+  }
 }
 
 /* ════════════════════════════════════════
@@ -1643,13 +1658,16 @@ async function saveOverTournament() {
   if (S._tournamentOwner && S._tournamentOwner !== me && AUTH.currentUser?.role !== 'admin') {
     alert('⛔ Bạn không có quyền lưu đè giải đấu này.'); return;
   }
-  if (!confirm('Lưu đè lên giải đấu hiện tại? Kết quả và dữ liệu cũ sẽ bị ghi đè bằng dữ liệu mới.')) return;
-  showLoading('Đang lưu đè...');
+  const btn = document.getElementById('btnSaveOverSidebar');
+  const origText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Đang lưu...'; }
   try {
     await saveTournamentData(S._tournamentId, buildSnapshot());
-    hideLoading();
-    alert('✅ Đã lưu đè thành công!');
-  } catch(e) { hideLoading(); alert('❌ Lỗi lưu: ' + e.message); }
+    if (btn) { btn.innerHTML = '✅ Đã lưu!'; setTimeout(() => { btn.innerHTML = origText; btn.disabled = false; }, 2000); }
+  } catch(e) {
+    if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+    alert('❌ Lỗi lưu: ' + e.message);
+  }
 }
 
 async function saveTournamentFromModal() {
@@ -1858,6 +1876,7 @@ async function loadTournament(id) {
     document.getElementById('selMode').value = S.mode;
     document.getElementById('knockoutActions').style.display = S.mode === 'knockout' ? 'block' : 'none';
     document.getElementById('roundrobinActions').style.display = S.mode === 'roundrobin' ? 'block' : 'none';
+    lockBocTham();
   } catch(e) { hideLoading(); alert('❌ Lỗi: ' + e.message); }
 }
 
@@ -2361,10 +2380,7 @@ function bocTham() {
   renderContent();
   document.getElementById('knockoutActions').style.display = S.mode === 'knockout' ? 'block' : 'none';
   document.getElementById('roundrobinActions').style.display = S.mode === 'roundrobin' ? 'block' : 'none';
-  var _btn=document.querySelector("button[onclick='bocTham()']")
-  if(_btn){_btn.disabled=true;_btn.innerHTML='🔒 Đã bốc thăm';_btn.title='Đã khóa bốc thăm.';}
-  var _tp=document.getElementById('txtPlayers');if(_tp)_tp.disabled=true;
-  var _sm=document.getElementById('selMode');if(_sm)_sm.disabled=true;
+  lockBocTham();
 }
 
 function zoomIn()  { S.zoom = Math.min(3.0, +(S.zoom + 0.15).toFixed(2)); renderBracket(); updateZoomLabel(); }
@@ -3338,13 +3354,18 @@ async function openAssignModal(ri, mi, matchNo, vdv1, vdv2, customMatchKey) {
     matchLabel = parts[1] + ' - Trận ' + matchNo;
   }
   _assignTarget = { ri, mi, matchNo, matchLabel, vdv1, vdv2, matchKey };
-  // Tìm sân từ schedule
-  const schedMatch = (S.schedule || []).find(r => {
-    if (customMatchKey) return false; // RR không có trong schedule chuẩn
-    const rKey = r.ri + ',' + r.mi;
-    return rKey === matchKey;
-  });
-  _assignTarget.san = schedMatch?.san || null;
+  // Tìm sân từ schedule (cả KO lẫn RR)
+  let foundSan = null;
+  if (customMatchKey && customMatchKey.startsWith('rr::')) {
+    const parts = customMatchKey.split('::');
+    const gName = parts[1], pairIdx = parseInt(parts[2]);
+    const item = (S.schedule || []).find(r => r.group === gName && r.pairIdx === pairIdx);
+    if (item && item.san) foundSan = String(item.san);
+  } else {
+    const item = (S.schedule || []).find(r => String(r.ri) + ',' + String(r.mi) === String(ri) + ',' + String(mi));
+    if (item && item.san) foundSan = String(item.san);
+  }
+  _assignTarget.san = foundSan;
   _assignSelected = null;
 
   document.getElementById('assignMatchInfo').innerHTML =
@@ -3352,6 +3373,10 @@ async function openAssignModal(ri, mi, matchNo, vdv1, vdv2, customMatchKey) {
      <span style="color:var(--muted)">${vdv1}</span>
      <span style="color:#f97316;font-weight:700"> vs </span>
      <span style="color:var(--muted)">${vdv2}</span>`;
+
+  // Điền sân hiện tại vào ô input (cho phép chỉnh sửa)
+  const sanInput = document.getElementById('assignSanInput');
+  if (sanInput) sanInput.value = _assignTarget.san || '';
 
   const listEl = document.getElementById('refUserList');
   listEl.innerHTML = '<div style="color:var(--muted);font-size:13px">⏳ Đang tải...</div>';
@@ -3399,21 +3424,43 @@ function selectRef(username) {
 async function confirmAssign() {
   if (!_assignSelected) { alert('Vui lòng chọn trọng tài.'); return; }
   if (!_assignTarget) return;
-  const { matchNo, matchLabel, vdv1, vdv2, matchKey, san } = _assignTarget;
-  const id = 'A' + S._tournamentId + '_' + matchKey.replace(/[^a-zA-Z0-9]/g,'_');
+  const { matchNo, matchLabel, vdv1, vdv2, matchKey } = _assignTarget;
 
+  // Đọc sân từ input — cho phép chỉnh sửa
+  const sanInput = document.getElementById('assignSanInput');
+  const newSan = sanInput ? sanInput.value.trim() : (_assignTarget.san || null);
+
+  // Nếu sân thay đổi → cập nhật trong schedule và lưu lại
+  if (newSan !== String(_assignTarget.san || '')) {
+    if (matchKey.startsWith('rr::')) {
+      const parts = matchKey.split('::');
+      const gName = parts[1], pairIdx = parseInt(parts[2]);
+      const item = (S.schedule || []).find(r => r.group === gName && r.pairIdx === pairIdx);
+      if (item) item.san = newSan || null;
+    } else {
+      const item = (S.schedule || []).find(r => (r.ri + ',' + r.mi) === matchKey);
+      if (item) item.san = newSan || null;
+    }
+    // Lưu lại tournament data với sân mới
+    if (S._tournamentId) {
+      saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('updateSan:', e));
+    }
+  }
+
+  const id = 'A' + S._tournamentId + '_' + matchKey.replace(/[^a-zA-Z0-9]/g,'_');
   showLoading('Đang phân công...');
   try {
     await saveAssignment({
       id, tournament_id: S._tournamentId, match_key: matchKey,
       match_label: matchLabel, vdv1, vdv2,
-      referee: _assignSelected, status: 'pending'
+      referee: _assignSelected, status: 'pending',
+      san: newSan || null
     });
     hideLoading();
     closeAssignModal();
-    // Re-render table to show badge
     renderContent();
-    alert('✅ Đã phân công ' + _assignSelected + ' cho ' + matchLabel);
+    const sanTxt = newSan ? ' · Sân ' + newSan : '';
+    alert('✅ Đã phân công ' + _assignSelected + ' cho ' + matchLabel + sanTxt);
   } catch(e) {
     hideLoading();
     alert('❌ Lỗi: ' + e.message);
@@ -3440,29 +3487,25 @@ async function checkAndShowRefScreen() {
       showRefWaiting();
       return;
     }
-    REF.assignment = assignment;
     REF.liveKey = assignment.tournament_id + ':' + assignment.match_key;
     const tdata = await getTournamentData(assignment.tournament_id);
     if (tdata) { Object.assign(S, tdata); S._tournamentId = assignment.tournament_id; }
 
-    // Lấy san từ schedule (không lưu trong assignments table)
+    // Lấy san từ DB (nếu có) hoặc fallback từ schedule
     if (!assignment.san) {
       const mk = assignment.match_key;
       if (mk.startsWith('rr::')) {
-        // RR: rr::GroupName::pairIdx — tìm trong schedule RR
         const parts = mk.split('::');
-        const gName = parts[1];
-        const pairIdx = parseInt(parts[2]);
-        const schedItem = (S.schedule || []).find(r => r.group === gName && r.pairIdx === pairIdx);
-        if (schedItem?.san) assignment.san = String(schedItem.san);
+        const schedItem = (S.schedule || []).find(r => r.group === parts[1] && r.pairIdx === parseInt(parts[2]));
+        if (schedItem && schedItem.san) assignment.san = String(schedItem.san);
       } else {
-        // KO: ri,mi
+        // Thử các format: "ri,mi" hoặc matchNo
         const schedItem = (S.schedule || []).find(r => (r.ri + ',' + r.mi) === mk);
-        if (schedItem?.san) assignment.san = String(schedItem.san);
+        if (schedItem && schedItem.san) assignment.san = String(schedItem.san);
       }
     }
-
-    // Khôi phục trạng thái chấm điểm nếu có
+    console.log('[REF] san resolved:', assignment.san, '| match_key:', assignment.match_key);
+    REF.assignment = assignment; // cập nhật lại với san đã lookup
     const restored = restoreRefState();
     if (restored && REF.started) {
       // Đã có dữ liệu đang chấm → hiện thẳng màn hình, khôi phục timer
@@ -3811,22 +3854,22 @@ function refScore(displaySide, delta) {
 // ── Gọi hỗ trợ ──────────────────────────
 async function refCallHelp(type) {
   const asgn = REF.assignment;
-  if (!asgn) return;
-  const san = asgn.san ? 'Sân ' + asgn.san : (asgn.match_label || 'Trọng tài');
+  if (!asgn) { alert('Chưa có trận nào đang chạy.'); return; }
+  console.log('[refCallHelp] asgn.san=', asgn.san, '| match_key=', asgn.match_key, '| match_label=', asgn.match_label);
+  const sanRaw = asgn.san || null;
+  const san = sanRaw
+    ? (/^s[aâ]n\s*/i.test(sanRaw) ? sanRaw : 'Sân ' + sanRaw)
+    : (asgn.match_label ? 'Trọng tài (' + asgn.match_label + ')' : 'Trọng tài');
   const msg = type === 'shuttle'
     ? san + ' gọi thêm cầu 🏸'
     : san + ' gọi Tổng trọng tài 📣';
 
   const btnClass = type === 'shuttle' ? 'btn-call-shuttle' : 'btn-call-chief';
   const btn = document.querySelector('.' + btnClass);
-  if (btn) {
-    const orig = btn.textContent;
-    btn.textContent = '✅ Đã gửi!';
-    btn.disabled = true;
-    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
-  }
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ Đang gửi...'; btn.disabled = true; }
   try {
-    await getDB().from('bmt_notifications').insert({
+    const { error } = await getDB().from('bmt_notifications').insert({
       tournament_id: asgn.tournament_id,
       type, message: msg,
       san: asgn.san || null,
@@ -3834,7 +3877,19 @@ async function refCallHelp(type) {
       created_at: new Date().toISOString(),
       read: false,
     });
-  } catch(e) { console.warn('refCallHelp:', e); }
+    if (error) {
+      console.error('refCallHelp:', error);
+      alert('❌ Lỗi gửi thông báo: ' + (error.message || JSON.stringify(error)));
+      if (btn) { btn.textContent = origText; btn.disabled = false; }
+    } else {
+      if (btn) { btn.textContent = '✅ Đã gửi!'; }
+      setTimeout(() => { if (btn) { btn.textContent = origText; btn.disabled = false; } }, 3000);
+    }
+  } catch(e) {
+    console.error('refCallHelp exception:', e);
+    alert('❌ Lỗi: ' + e.message);
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 let _notifChannel = null;
@@ -3846,8 +3901,13 @@ function subscribeToNotifications(tid) {
     .channel('notif-' + tid)
     .on('postgres_changes', { event: 'INSERT', schema: 'public',
       table: 'bmt_notifications', filter: 'tournament_id=eq.' + tid
-    }, payload => { if (payload.new?.message) showNotifToast(payload.new); })
-    .subscribe();
+    }, payload => {
+      console.log('[NOTIF]', payload.new);
+      if (payload.new?.message) showNotifToast(payload.new);
+    })
+    .subscribe(status => {
+      console.log('[NOTIF] channel status:', status);
+    });
 }
 
 function showNotifToast(notif) {
@@ -4541,6 +4601,10 @@ window.addEventListener('DOMContentLoaded', () => {
       <button class="btn-logout" onclick="closeAssignModal()">✕</button>
     </div>
     <div id="assignMatchInfo" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:var(--text)"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div class="field-label" style="margin-bottom:0;white-space:nowrap">Sân thi đấu:</div>
+      <input id="assignSanInput" type="text" placeholder="VD: 1, 2, Sân A..." style="flex:1;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;font-family:'Barlow Condensed',sans-serif;font-weight:600"/>
+    </div>
     <div class="field-label" style="margin-bottom:8px">Chọn trọng tài:</div>
     <div id="refUserList"></div>
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
@@ -4745,37 +4809,25 @@ window.addEventListener('DOMContentLoaded', () => {
 
 <script>
 /* ═══════════ SCREEN SCORE ═══════════ */
-const SS = { tid: null, court: null, channel: null, liveData: null };
-
-// Helper hiển thị/ẩn tương thích TV browser
-function ssShow(id, flexDir) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.setProperty('display', flexDir || 'flex', 'important');
-}
-function ssHide(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.setProperty('display', 'none', 'important');
-}
+var SS = { tid: null, court: null, channel: null, liveData: null };
+var _ssPollingInterval = null;
 
 function openScreenScore() {
-  ssShow('screenScoreOverlay');
+  document.getElementById('screenScoreOverlay').style.display = 'flex';
   ssLoadTournaments();
   ssClock();
   setInterval(ssClock, 1000);
-
-  // Khôi phục từ sessionStorage nếu có (F5 không mất)
   try {
-    const saved = JSON.parse(sessionStorage.getItem('bmt_ss') || 'null');
-    if (saved?.tid && saved?.court) {
+    var saved = JSON.parse(sessionStorage.getItem('bmt_ss') || 'null');
+    if (saved && saved.tid && saved.court) {
       SS.tid = saved.tid; SS.court = saved.court;
-      const courtLabel = /^s[aâ]n\s*/i.test(saved.court) ? saved.court : 'Sân ' + saved.court;
+      var courtLabel = /^s[aâ]n\s*/i.test(saved.court) ? saved.court : 'Sân ' + saved.court;
       document.getElementById('ssCourtName').textContent = courtLabel;
       document.getElementById('ssTournamentName').textContent = saved.tName || saved.tid;
-      ssHide('ssSetup');
-      ssShow('ssDisplay');
+      document.getElementById('ssSetup').style.display = 'none';
+      document.getElementById('ssDisplay').style.display = 'flex';
       ssSubscribe(saved.tid, saved.court);
+      ssStartPolling(saved.tid, saved.court);
       ssFetch(saved.tid, saved.court);
       return;
     }
@@ -4784,123 +4836,146 @@ function openScreenScore() {
 
 function closeScreenScore() {
   if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
-  ssHide('screenScoreOverlay');
+  ssStopPolling();
+  document.getElementById('screenScoreOverlay').style.display = 'none';
 }
 
 function ssClock() {
-  const n = new Date();
-  const t = [n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
-  const el = document.getElementById('ssClock');
+  var n = new Date();
+  var t = [n.getHours(), n.getMinutes(), n.getSeconds()]
+    .map(function(x){ return String(x).length < 2 ? '0'+x : ''+x; }).join(':');
+  var el = document.getElementById('ssClock');
   if (el) el.textContent = t;
 }
 
-async function ssLoadTournaments() {
-  const sel = document.getElementById('ssTournament');
-  try {
-    const { data } = await getDB().from('bmt_tournaments').select('*').order('created_at',{ascending:false});
-    if (!data?.length) { sel.innerHTML = '<option value="">Không có giải đấu</option>'; return; }
-    sel.innerHTML = '<option value="">— Chọn giải đấu —</option>' +
-      data.map(t=>`<option value="${t.id}">${t.name||t.id}</option>`).join('');
-  } catch(e) { sel.innerHTML = '<option value="">Lỗi kết nối</option>'; }
+function ssLoadTournaments() {
+  var sel = document.getElementById('ssTournament');
+  getDB().from('bmt_tournaments').select('*').order('created_at', {ascending: false})
+    .then(function(res) {
+      var data = res.data;
+      if (!data || !data.length) { sel.innerHTML = '<option value="">Không có giải đấu</option>'; return; }
+      sel.innerHTML = '<option value="">— Chọn giải đấu —</option>' +
+        data.map(function(t){ return '<option value="'+t.id+'">'+(t.name||t.id)+'</option>'; }).join('');
+    })
+    .catch(function(e) { sel.innerHTML = '<option value="">Lỗi kết nối</option>'; });
 }
 
-async function ssLoadCourts(tid) {
-  const sel = document.getElementById('ssCourt');
+function ssLoadCourts(tid) {
+  var sel = document.getElementById('ssCourt');
   if (!tid) { sel.innerHTML = '<option value="">— Chọn giải trước —</option>'; return; }
   sel.innerHTML = '<option value="">⏳ Đang tải sân...</option>';
-  try {
-    const { data } = await getDB().from('bmt_tournament_data').select('data').eq('tournament_id',tid).single();
-    const courts = new Set();
-    (data?.data?.schedule||[]).forEach(r => { if(r.san) courts.add(String(r.san)); });
-    if (!courts.size) {
-      sel.innerHTML = '<option value="all">Tất cả sân</option>';
-    } else {
-      const sorted = [...courts].sort((a,b)=>{ const na=parseInt(a),nb=parseInt(b); return isNaN(na)?a.localeCompare(b):na-nb; });
-      sel.innerHTML = '<option value="">— Chọn sân —</option>' + sorted.map(c=>{
-        // Tránh double "Sân Sân X" nếu tên sân đã có chữ "Sân"
-        const label = /^s[aâ]n\s*/i.test(c) ? c : 'Sân ' + c;
-        return `<option value="${c}">${label}</option>`;
-      }).join('');
-    }
-  } catch(e) { sel.innerHTML = '<option value="">Lỗi tải dữ liệu</option>'; }
+  getDB().from('bmt_tournament_data').select('data').eq('tournament_id', tid).single()
+    .then(function(res) {
+      var data = res.data;
+      var courts = [];
+      var schedule = (data && data.data && data.data.schedule) || [];
+      schedule.forEach(function(r) { if (r.san && courts.indexOf(String(r.san)) === -1) courts.push(String(r.san)); });
+      courts.sort(function(a,b){ var na=parseInt(a), nb=parseInt(b); return isNaN(na)?a.localeCompare(b):na-nb; });
+      if (!courts.length) {
+        sel.innerHTML = '<option value="all">Tất cả sân</option>';
+      } else {
+        sel.innerHTML = '<option value="">— Chọn sân —</option>' + courts.map(function(c){
+          var label = /^s[aâ]n\s*/i.test(c) ? c : 'Sân ' + c;
+          return '<option value="'+c+'">'+label+'</option>';
+        }).join('');
+      }
+    })
+    .catch(function(e) { sel.innerHTML = '<option value="">Lỗi tải dữ liệu</option>'; });
 }
 
-async function ssStart() {
-  const tid   = document.getElementById('ssTournament').value;
-  const court = document.getElementById('ssCourt').value;
+function ssStart() {
+  var tid   = document.getElementById('ssTournament').value;
+  var court = document.getElementById('ssCourt').value;
   if (!tid)   { alert('Vui lòng chọn giải đấu.'); return; }
   if (!court) { alert('Vui lòng chọn sân.'); return; }
 
   SS.tid = tid; SS.court = court;
 
-  const tSel = document.getElementById('ssTournament');
-  const tName = tSel.options[tSel.selectedIndex]?.text || tid;
-  // Lưu vào sessionStorage để F5 không mất
-  try { sessionStorage.setItem('bmt_ss', JSON.stringify({ tid, court, tName })); } catch(e) {}
+  var tSel = document.getElementById('ssTournament');
+  var tName = (tSel.options[tSel.selectedIndex] && tSel.options[tSel.selectedIndex].text) || tid;
+  try { sessionStorage.setItem('bmt_ss', JSON.stringify({ tid: tid, court: court, tName: tName })); } catch(e) {}
 
-  const courtLabel = /^s[aâ]n\s*/i.test(court) ? court : 'Sân ' + court;
+  var courtLabel = /^s[aâ]n\s*/i.test(court) ? court : 'Sân ' + court;
   document.getElementById('ssCourtName').textContent = courtLabel;
   document.getElementById('ssTournamentName').textContent = tName;
-
-  ssHide('ssSetup');
-  ssShow('ssDisplay');
+  document.getElementById('ssSetup').style.display = 'none';
+  document.getElementById('ssDisplay').style.display = 'flex';
 
   ssSubscribe(tid, court);
-  await ssFetch(tid, court);
+  ssStartPolling(tid, court);
+  ssFetch(tid, court);
 }
 
 function ssBackToSetup() {
   if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} SS.channel = null; }
+  ssStopPolling();
   SS.liveData = null;
   try { sessionStorage.removeItem('bmt_ss'); } catch(e) {}
-  ssHide('ssDisplay');
-  ssShow('ssSetup');
+  document.getElementById('ssDisplay').style.display = 'none';
+  document.getElementById('ssSetup').style.display = 'flex';
   ssSetIdle();
+}
+
+function ssStartPolling(tid, court) {
+  ssStopPolling();
+  _ssPollingInterval = setInterval(function() { ssFetch(tid, court); }, 5000);
+}
+function ssStopPolling() {
+  if (_ssPollingInterval) { clearInterval(_ssPollingInterval); _ssPollingInterval = null; }
 }
 
 function ssSubscribe(tid, court) {
   if (SS.channel) { try { getDB().removeChannel(SS.channel); } catch(e){} }
-  SS.channel = getDB()
-    .channel('ss-' + tid + '-' + court)
-    .on('postgres_changes', { event:'*', schema:'public', table:'bmt_live_scores', filter:'tournament_id=eq.'+tid }, payload => {
-      if (payload.eventType === 'DELETE') {
-        if (SS.liveData && payload.old?.match_key === SS.liveData._mk) {
-          ssShowEnded(SS.liveData);
-          setTimeout(() => { SS.liveData = null; ssSetIdle(); }, 9000);
-        }
-        return;
-      }
-      if (payload.new?.score_data) {
-        const sd = payload.new.score_data;
-        if (ssIsOurCourt(sd)) {
-          SS.liveData = { ...sd, _mk: payload.new.match_key };
-          ssRender(SS.liveData);
-        }
-      }
-    })
-    .subscribe();
+  try {
+    SS.channel = getDB()
+      .channel('ss-' + tid + '-' + court)
+      .on('postgres_changes', { event:'*', schema:'public', table:'bmt_live_scores', filter:'tournament_id=eq.'+tid },
+        function(payload) {
+          if (payload.eventType === 'DELETE') {
+            if (SS.liveData && (payload.old && payload.old.match_key) === SS.liveData._mk) {
+              ssShowEnded(SS.liveData);
+              setTimeout(function(){ SS.liveData = null; ssSetIdle(); }, 9000);
+            }
+            return;
+          }
+          var sd = payload.new && payload.new.score_data;
+          if (sd && ssIsOurCourt(sd)) {
+            SS.liveData = Object.assign({}, sd, { _mk: payload.new.match_key });
+            ssRender(SS.liveData);
+          }
+        })
+      .subscribe();
+  } catch(e) { console.warn('ssSubscribe error:', e); }
 }
 
-async function ssFetch(tid, court) {
-  try {
-    const { data } = await getDB().from('bmt_live_scores').select('*').eq('tournament_id', tid);
-    if (!data) { ssSetIdle(); return; }
-    const match = data.find(r => r.score_data && ssIsOurCourt(r.score_data));
-    if (match) {
-      SS.liveData = { ...match.score_data, _mk: match.match_key };
-      ssRender(SS.liveData);
-    } else { ssSetIdle(); }
-  } catch(e) { ssSetIdle(); }
+function ssFetch(tid, court) {
+  getDB().from('bmt_live_scores').select('*').eq('tournament_id', tid)
+    .then(function(res) {
+      var data = res.data;
+      if (!data) { ssSetIdle(); return; }
+      var match = null;
+      for (var i = 0; i < data.length; i++) {
+        if (data[i].score_data && ssIsOurCourt(data[i].score_data)) { match = data[i]; break; }
+      }
+      if (match) {
+        SS.liveData = Object.assign({}, match.score_data, { _mk: match.match_key });
+        ssRender(SS.liveData);
+      } else {
+        if (SS.liveData) return; // giữ màn hình cũ nếu đang hiển thị
+        ssSetIdle();
+      }
+    })
+    .catch(function(e) { ssSetIdle(); });
 }
 
 function ssIsOurCourt(sd) {
-  const c = String(sd.san ?? sd.court ?? '').trim();
+  var c = String(sd.san != null ? sd.san : (sd.court != null ? sd.court : '')).trim();
   return c === String(SS.court).trim();
 }
 
 function ssSetStatus(live) {
-  const dot  = document.getElementById('ssDot');
-  const stxt = document.getElementById('ssStatusTxt');
+  var dot  = document.getElementById('ssDot');
+  var stxt = document.getElementById('ssStatusTxt');
   if (!dot || !stxt) return;
   if (live === 'active') {
     dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#22c55e;animation:ss-pulse 2s infinite';
@@ -4915,90 +4990,91 @@ function ssSetStatus(live) {
 }
 
 function ssRender(sd) {
-  const area = document.getElementById('ssScoreArea');
+  var area = document.getElementById('ssScoreArea');
   if (!area) return;
   ssSetStatus('active');
 
-  const s1 = sd.s1 ?? 0, s2 = sd.s2 ?? 0;
-  const w1 = sd.w1 ?? 0, w2 = sd.w2 ?? 0;
-  const sets = sd.sets || [];
-  const setNo = sets.length + 1;
-  const vdv1 = sd.vdv1 || 'VĐV 1';
-  const vdv2 = sd.vdv2 || 'VĐV 2';
-  const p1win = w1 > w2 || (w1 === w2 && s1 > s2);
-  const p2win = w2 > w1 || (w1 === w2 && s2 > s1);
+  var s1 = sd.s1 != null ? sd.s1 : 0;
+  var s2 = sd.s2 != null ? sd.s2 : 0;
+  var w1 = sd.w1 != null ? sd.w1 : 0;
+  var w2 = sd.w2 != null ? sd.w2 : 0;
+  var sets = sd.sets || [];
+  var setNo = sets.length + 1;
+  var vdv1 = sd.vdv1 || 'VĐV 1';
+  var vdv2 = sd.vdv2 || 'VĐV 2';
+  var p1win = w1 > w2 || (w1 === w2 && s1 > s2);
+  var p2win = w2 > w1 || (w1 === w2 && s2 > s1);
 
   function setScoresCols(p) {
-    // Hiển thị set đã kết thúc (nhỏ)
-    let h = '';
-    sets.forEach((set,i) => {
-      const my = p===1?set.s1:set.s2, op = p===1?set.s2:set.s1;
-      const won = my > op;
-      h += `<div style="display:flex;flex-direction:column;align-items:center;padding:8px 14px;border-left:1px solid rgba(255,255,255,.07);min-width:46px">
-        <div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#6b7a9a;margin-bottom:3px">S${i+1}</div>
-        <div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:${won?'#f97316':'#6b7a9a'};line-height:1">${my}</div>
-      </div>`;
+    var h = '';
+    sets.forEach(function(set, i) {
+      var my = p===1 ? set.s1 : set.s2;
+      var op = p===1 ? set.s2 : set.s1;
+      var won = my > op;
+      h += '<div style="display:flex;flex-direction:column;align-items:center;padding:8px 14px;border-left:1px solid rgba(255,255,255,.07);min-width:46px">'
+        + '<div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#6b7a9a;margin-bottom:3px">S'+(i+1)+'</div>'
+        + '<div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:'+(won?'#f97316':'#6b7a9a')+';line-height:1">'+my+'</div>'
+        + '</div>';
     });
     return h;
   }
 
   function playerRow(name, p, isWin) {
-    const accentColor = isWin ? '#fbbf24' : '#f0f4ff';
-    const borderColor = isWin ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.07)';
-    const glowColor   = isWin ? 'rgba(251,191,36,.12)' : 'transparent';
-    const currentScore = p === 1 ? s1 : s2;
-    const setsWon      = p === 1 ? w1 : w2;
-    const winBar = isWin ? '<div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#fbbf24;border-radius:4px 0 0 4px"></div>' : '';
-    const padLeft = isWin ? '26px' : '20px';
-    const setWonColor = isWin ? '#f97316' : '#6b7a9a';
-    const scoreColor  = isWin ? '#fbbf24' : '#f0f4ff';
-    return '<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;background:#0e1420;border:1px solid ' + borderColor + ';border-radius:14px;overflow:hidden;position:relative;box-shadow:0 6px 30px ' + glowColor + ';transition:all .3s">'
+    var accentColor = isWin ? '#fbbf24' : '#f0f4ff';
+    var borderColor = isWin ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.07)';
+    var glowColor   = isWin ? 'rgba(251,191,36,.12)' : 'transparent';
+    var currentScore = p === 1 ? s1 : s2;
+    var setsWon      = p === 1 ? w1 : w2;
+    var winBar = isWin ? '<div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#fbbf24;border-radius:4px 0 0 4px"></div>' : '';
+    var padLeft = isWin ? '26px' : '20px';
+    var setWonColor = isWin ? '#f97316' : '#6b7a9a';
+    var scoreColor  = isWin ? '#fbbf24' : '#f0f4ff';
+    return '<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;background:#0e1420;border:1px solid '+borderColor+';border-radius:14px;overflow:hidden;position:relative;box-shadow:0 6px 30px '+glowColor+';transition:all .3s">'
       + winBar
-      + '<div style="padding:28px 20px 28px ' + padLeft + ';min-width:0;overflow:hidden">'
-      + '<div style="font-family:\'Be Vietnam Pro\',sans-serif;font-size:clamp(22px,3.5vw,48px);font-weight:900;letter-spacing:0px;color:' + accentColor + ';line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</div>'
+      + '<div style="padding:28px 20px 28px '+padLeft+';min-width:0;overflow:hidden">'
+      + '<div style="font-family:Tahoma,Arial,sans-serif;font-size:clamp(22px,3.5vw,48px);font-weight:900;letter-spacing:0px;color:'+accentColor+';line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+name+'</div>'
       + '</div>'
-      + '<div style="display:flex;border-left:1px solid rgba(255,255,255,.07)">' + setScoresCols(p) + '</div>'
+      + '<div style="display:flex;border-left:1px solid rgba(255,255,255,.07)">'+setScoresCols(p)+'</div>'
       + '<div style="display:flex;align-items:center;border-left:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.3)">'
       + '<div style="display:flex;flex-direction:column;align-items:center;padding:8px 14px;border-right:1px solid rgba(255,255,255,.07)">'
       + '<div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#6b7a9a;margin-bottom:3px">SET</div>'
-      + '<div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:' + setWonColor + ';line-height:1">' + setsWon + '</div>'
+      + '<div style="font-size:clamp(18px,2.2vw,28px);font-weight:900;color:'+setWonColor+';line-height:1">'+setsWon+'</div>'
       + '</div>'
       + '<div style="display:flex;align-items:center;justify-content:center;min-width:clamp(90px,11vw,140px);padding:0 20px">'
-      + '<div id="ssMain' + p + '" style="font-family:\'Barlow Condensed\',sans-serif;font-size:clamp(56px,9vw,110px);font-weight:900;color:' + scoreColor + ';line-height:1">' + currentScore + '</div>'
+      + '<div id="ssMain'+p+'" style="font-family:Tahoma,Arial,sans-serif;font-size:clamp(56px,9vw,110px);font-weight:900;color:'+scoreColor+';line-height:1">'+currentScore+'</div>'
       + '</div>'
       + '</div>'
       + '</div>';
   }
 
-  area.innerHTML = `
-    <div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase;margin-bottom:-4px">SET ${setNo} · ĐANG DIỄN RA</div>
-    ${playerRow(vdv1, 1, p1win)}
-    <div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:rgba(107,122,154,.5)">
-      <span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-right:10px"></span>
-      VS
-      <span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-left:10px"></span>
-    </div>
-    ${playerRow(vdv2, 2, p2win)}
-  `;
+  area.innerHTML =
+    '<div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase;margin-bottom:-4px">SET '+setNo+' · ĐANG DIỄN RA</div>'
+    + playerRow(vdv1, 1, p1win)
+    + '<div style="text-align:center;font-size:13px;font-weight:700;letter-spacing:4px;color:rgba(107,122,154,.5)">'
+    + '<span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-right:10px"></span>'
+    + 'VS'
+    + '<span style="display:inline-block;width:40px;height:1px;background:rgba(255,255,255,.08);vertical-align:middle;margin-left:10px"></span>'
+    + '</div>'
+    + playerRow(vdv2, 2, p2win);
 
-  document.getElementById('ssSetInfo').textContent = `Set ${setNo}  ·  ${w1}–${w2} set`;
-  document.getElementById('ssShuttle').textContent = sd.shuttle != null ? `🏸 ${sd.shuttle} lần thay cầu` : '';
+  document.getElementById('ssSetInfo').textContent = 'Set '+setNo+'  ·  '+w1+'–'+w2+' set';
+  document.getElementById('ssShuttle').textContent = sd.shuttle != null ? '🏸 '+sd.shuttle+' lần thay cầu' : '';
 }
 
 function ssShowEnded(sd) {
-  const area = document.getElementById('ssScoreArea');
+  var area = document.getElementById('ssScoreArea');
   if (!area) return;
   ssSetStatus('ended');
-  const w1 = sd.w1 ?? 0, w2 = sd.w2 ?? 0;
-  const winner = w1 > w2 ? sd.vdv1 : sd.vdv2;
-  area.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;flex:1">
-      <div style="background:#0e1420;border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:48px 64px;text-align:center;box-shadow:0 20px 60px rgba(251,191,36,.1)">
-        <div style="font-size:72px;margin-bottom:12px">🏆</div>
-        <div style="font-size:clamp(36px,6vw,72px);font-weight:900;color:#fbbf24;letter-spacing:2px;line-height:1">${winner || 'KẾT THÚC'}</div>
-        <div style="font-size:18px;color:#6b7a9a;letter-spacing:3px;text-transform:uppercase;margin-top:10px">THẮNG ${w1}–${w2} SET</div>
-      </div>
-    </div>`;
+  var w1 = sd.w1 != null ? sd.w1 : 0;
+  var w2 = sd.w2 != null ? sd.w2 : 0;
+  var winner = w1 > w2 ? sd.vdv1 : sd.vdv2;
+  area.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;flex:1">'
+    + '<div style="background:#0e1420;border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:48px 64px;text-align:center;box-shadow:0 20px 60px rgba(251,191,36,.1)">'
+    + '<div style="font-size:72px;margin-bottom:12px">🏆</div>'
+    + '<div style="font-family:Tahoma,Arial,sans-serif;font-size:clamp(36px,6vw,72px);font-weight:900;color:#fbbf24;letter-spacing:2px;line-height:1">'+(winner||'KẾT THÚC')+'</div>'
+    + '<div style="font-size:18px;color:#6b7a9a;letter-spacing:3px;text-transform:uppercase;margin-top:10px">THẮNG '+w1+'–'+w2+' SET</div>'
+    + '</div></div>';
   document.getElementById('ssSetInfo').textContent = '';
   document.getElementById('ssShuttle').textContent = '';
 }
@@ -5008,16 +5084,16 @@ function ssCourtLabel(c) {
 }
 
 function ssSetIdle() {
-  const area = document.getElementById('ssScoreArea');
+  var area = document.getElementById('ssScoreArea');
   if (!area) return;
   ssSetStatus('idle');
-  const courtTxt = ssCourtLabel(SS.court);
-  area.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1">
-      <div style="font-size:80px;animation:ss-idle-float 3s ease-in-out infinite">🏸</div>
-      <div style="font-size:28px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase">Chờ trận đấu</div>
-      <div style="font-size:15px;color:rgba(107,122,154,.5)">${courtTxt} chưa có trận đang diễn ra</div>
-    </div>`;
+  var courtTxt = ssCourtLabel(SS.court);
+  area.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1">'
+    + '<div style="font-size:80px;animation:ss-idle-float 3s ease-in-out infinite">🏸</div>'
+    + '<div style="font-size:28px;font-weight:700;letter-spacing:4px;color:#6b7a9a;text-transform:uppercase">Chờ trận đấu</div>'
+    + '<div style="font-size:15px;color:rgba(107,122,154,.5)">'+courtTxt+' chưa có trận đang diễn ra</div>'
+    + '</div>';
   document.getElementById('ssSetInfo').textContent = '';
   document.getElementById('ssShuttle').textContent = '';
 }
