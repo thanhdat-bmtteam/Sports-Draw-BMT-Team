@@ -1130,11 +1130,24 @@
       <textarea id="txtPlayers" placeholder="Ví dụ:&#10;VN - Nguyễn Văn A (1)&#10;VN - Trần Thị B (2)&#10;HN - Lê Văn C&#10;HCM - Phạm Thị D"></textarea>
     </div>
     <button class="btn btn-primary" onclick="bocTham()">🎲 Bốc thăm</button>
+    <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">hoặc nhập tay</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <div id="manualBracketRow" style="display:none">
+      <div class="field-label">Tạo khung trống (nhập tay)</div>
+      <input id="selManualSize" type="number" min="2" max="128" value="8" placeholder="Nhập số VĐV..."
+        style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:22px;font-weight:700;text-align:center;margin-bottom:6px;box-sizing:border-box"/>
+      <button class="btn btn-secondary" style="width:100%;padding:10px;font-size:14px" onclick="createManualBracket()">📋 Tạo khung</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Nhập số VĐV bất kỳ — ô còn thiếu sẽ tự điền BYE</div>
+    </div>
     <hr class="divider"/>
     <div id="knockoutActions" style="display:none">
       <div class="section-title">📋 Loại trực tiếp</div>
       <div style="display:flex;flex-direction:column;gap:7px">
         <button class="btn btn-secondary" onclick="showScheduleConfig('knockout')">📅 Xếp lịch thi đấu</button>
+        <button class="btn btn-secondary" id="btnEditSlots" onclick="showManualSlotEditor()" style="display:none">✍️ Sửa tên VĐV trong sơ đồ</button>
         <div class="row2">
           <button class="btn btn-secondary btn-sm" onclick="zoomIn()">🔍 +</button>
           <button class="btn btn-secondary btn-sm" onclick="zoomOut()">🔍 −</button>
@@ -1462,6 +1475,9 @@ function lockBocTham() {
   if (btn) { btn.disabled = true; btn.innerHTML = '🔒 Đã bốc thăm'; btn.title = 'Giải đã được tải — khóa bốc thăm mới.'; }
   const tp = document.getElementById('txtPlayers'); if (tp) tp.disabled = true;
   const sm = document.getElementById('selMode'); if (sm) sm.disabled = true;
+  // Hiện nút sửa tên nếu là knockout
+  const editBtn = document.getElementById('btnEditSlots');
+  if (editBtn && S.mode === 'knockout') editBtn.style.display = 'block';
 }
 
 function resetDraw() {
@@ -2371,8 +2387,159 @@ function buildRRTimeline(pairsByGroup, courts, phut, start) {
    MAIN ACTIONS
 ════════════════════════════════════════ */
 function onModeChange() {
-  document.getElementById('numBangRow').style.display =
-    document.getElementById('selMode').value === 'roundrobin' ? 'block' : 'none';
+  const mode = document.getElementById('selMode').value;
+  document.getElementById('numBangRow').style.display = mode === 'roundrobin' ? 'block' : 'none';
+  document.getElementById('manualBracketRow').style.display = mode === 'knockout' ? 'block' : 'none';
+}
+
+function createManualBracket() {
+  autoCloseSidebar();
+  if (!can('draw')) { alert('⛔ Bạn không có quyền thực hiện.'); return; }
+  const raw = parseInt(document.getElementById('selManualSize').value);
+  if (!raw || raw < 2 || raw > 128) { alert('Số VĐV phải từ 2 đến 128.'); return; }
+
+  S.mode = 'knockout';
+  S.maxSets = getMaxSets();
+  S.schedule = []; S.scheduleType = null; S.pairsByGroup = {}; S.showRRSchedule = false;
+  S.knockoutResults = {}; S.rrResults = {};
+
+  // Tạo fake players với seed=0 để buildSeedSlots đặt đúng vị trí
+  const fakePlayers = [];
+  for (var i = 0; i < raw; i++) {
+    fakePlayers.push({ raw: 'VĐV ' + (i+1), name: 'VĐV ' + (i+1), unit: '', seed: 0 });
+  }
+  S.players = fakePlayers;
+  setupKnockout(fakePlayers);
+  // setupKnockout đã map null→'BYE' và gọi rebuildKnockoutTree rồi — không cần gọi lại
+
+  renderContent();
+  document.getElementById('knockoutActions').style.display = 'block';
+  document.getElementById('roundrobinActions').style.display = 'none';
+  lockBocTham();
+  console.log('[manual] slots:', S.knockoutSlots);
+  showManualSlotEditor();
+}
+
+function msNextInput(el) {
+  if (event.key !== 'Enter') return;
+  var all = document.querySelectorAll('#manualSlotEditor input');
+  var idx = Array.from(all).indexOf(el);
+  if (all[idx + 1]) all[idx + 1].focus();
+}
+
+function msClose() { var el = document.getElementById('manualSlotEditor'); if (el) el.remove(); }
+function msNextInput(inp) { var all = document.querySelectorAll('#manualSlotEditor input'); var idx = Array.from(all).indexOf(inp); if (all[idx+1]) all[idx+1].focus(); }
+
+function showManualSlotEditor() {
+  msClose();
+  var slots = S.knockoutSlots;
+  var realSlots = [];
+  for (var i = 0; i < slots.length; i++) {
+    if (slots[i] !== 'BYE') realSlots.push({ name: slots[i], i: i });
+  }
+  var byeCount = slots.length - realSlots.length;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'manualSlotEditor';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Header
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between';
+  var title = document.createElement('h3');
+  title.style.cssText = 'margin:0;font-size:16px';
+  title.textContent = '✍️ Nhập tên VĐV (' + realSlots.length + ' người)';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = 'background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;line-height:1;padding:0';
+  closeBtn.onclick = msClose;
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  box.appendChild(header);
+
+  // BYE note
+  if (byeCount > 0) {
+    var note = document.createElement('div');
+    note.style.cssText = 'font-size:12px;color:#f97316;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:7px;padding:8px 12px';
+    note.innerHTML = '⚠️ Bracket ' + slots.length + ' ô — có <b>' + byeCount + ' BYE</b> tự xếp vào sơ đồ';
+    box.appendChild(note);
+  }
+
+  // Hint
+  var hint = document.createElement('div');
+  hint.style.cssText = 'font-size:12px;color:var(--muted)';
+  hint.textContent = 'Nhập theo thứ tự bốc thăm. Bấm Enter để chuyển ô tiếp theo.';
+  box.appendChild(hint);
+
+  // Grid
+  var cols = realSlots.length <= 8 ? 1 : 2;
+  var grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:' + (cols === 2 ? '1fr 1fr' : '1fr') + ';gap:8px';
+
+  realSlots.forEach(function(slot, order) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px';
+
+    var badge = document.createElement('div');
+    badge.style.cssText = 'min-width:26px;height:26px;border-radius:50%;background:var(--accent);color:#000;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+    badge.textContent = order + 1;
+
+    var inp = document.createElement('input');
+    inp.id = 'mslot_' + slot.i;
+    inp.type = 'text';
+    inp.placeholder = 'Tên VĐV ' + (order + 1) + '...';
+    inp.style.cssText = 'flex:1;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px';
+    if (slot.name && !slot.name.match(/^VĐV \d+$/)) inp.value = slot.name;
+    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') msNextInput(this); });
+
+    row.appendChild(badge);
+    row.appendChild(inp);
+    grid.appendChild(row);
+  });
+  box.appendChild(grid);
+
+  // Buttons
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:4px';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.style.cssText = 'width:auto;padding:8px 16px';
+  cancelBtn.textContent = 'Hủy';
+  cancelBtn.onclick = msClose;
+  var applyBtn = document.createElement('button');
+  applyBtn.className = 'btn';
+  applyBtn.style.cssText = 'width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700';
+  applyBtn.textContent = '✓ Áp dụng';
+  applyBtn.onclick = applyManualSlots;
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(applyBtn);
+  box.appendChild(btnRow);
+
+  setTimeout(function() { var f = box.querySelector('input'); if (f) f.focus(); }, 100);
+}
+function applyManualSlots() {
+  var playerCounter = 0;
+  S.knockoutSlots = S.knockoutSlots.map(function(orig, i) {
+    if (orig === 'BYE') return 'BYE';
+    playerCounter++;
+    var inp = document.getElementById('mslot_' + i);
+    var val = inp ? inp.value.trim() : '';
+    return val || ('VĐV ' + playerCounter);
+  });
+  // Cập nhật players để rebuildKnockoutTree dùng đúng tên
+  S.players = S.knockoutSlots.filter(function(s) { return s !== 'BYE'; }).map(function(s) { return { raw: s, name: s, unit: '', seed: null }; });
+  rebuildKnockoutTree();
+  renderContent();
+  document.getElementById('knockoutActions').style.display = 'block';
+  msClose();
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(function(e) { console.error('applyManualSlots:', e); });
+  }
 }
 
 function bocTham() {
