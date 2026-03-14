@@ -2304,12 +2304,23 @@ function calcRRStandings(groupName, players) {
     const res = S.rrResults[`${groupName}:${i}`];
     if (!res) continue;
     const [p1, p2] = pairs[i];
-    const { s1, s2, w1 = (s1 > s2 ? 1 : 0), w2 = (s2 > s1 ? 1 : 0) } = res;
-    stats[p1].scored += s1; stats[p1].conceded += s2;
-    stats[p2].scored += s2; stats[p2].conceded += s1;
-    if (w1 > w2) { stats[p1].p += 1; stats[p1].w++; stats[p2].l++; }
+    const { w1 = 0, w2 = 0, sets = [] } = res;
+
+    // Tính tổng điểm từng điểm trong các set (không phải số set thắng)
+    let pts1 = 0, pts2 = 0;
+    if (sets.length > 0) {
+      sets.forEach(s => { pts1 += (s.s1 || 0); pts2 += (s.s2 || 0); });
+    } else {
+      // fallback cho data cũ không có sets array
+      pts1 = res.s1 || 0; pts2 = res.s2 || 0;
+    }
+
+    stats[p1].scored   += pts1; stats[p1].conceded += pts2;
+    stats[p2].scored   += pts2; stats[p2].conceded += pts1;
+
+    if (w1 > w2)      { stats[p1].p += 1; stats[p1].w++; stats[p2].l++; }
     else if (w2 > w1) { stats[p2].p += 1; stats[p2].w++; stats[p1].l++; }
-    else { stats[p1].d++; stats[p2].d++; }
+    else              { stats[p1].d++; stats[p2].d++; }
   }
   return Object.entries(stats)
     .map(([name, st]) => ({ name, ...st, diff: st.scored - st.conceded }))
