@@ -1870,6 +1870,153 @@ async function deleteUser(username) {
   } catch(e) { hideLoading(); alert('❌ Lỗi: ' + e.message); }
 }
 
+async function exportTournamentReport(tid, tname) {
+  showLoading('Đang tổng hợp báo cáo...');
+  try {
+    const tdata = await getTournamentData(tid);
+    const reportsRes = await getDB().from('bmt_match_reports').select('*').eq('tournament_id', tid);
+    const reports = reportsRes.data || [];
+    hideLoading();
+    if (!tdata) { alert('Không tải được dữ liệu giải đấu.'); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210, margin = 16;
+    let y = 0;
+
+    // txt helper: passes color to addViText, falls back to doc.text
+    const txt = function(text, x, yy, opts) {
+      if (window.addViText) {
+        addViText(doc, String(text), x, yy, opts||{});
+      } else {
+        doc.text(String(text), x, yy, { align: (opts&&opts.align)||'left' });
+      }
+    };
+
+    // ── Header cam nổi bật ──
+    doc.setFillColor(232, 160, 32);
+    doc.rect(0, 0, W, 32, 'F');
+    txt('BÁO CÁO GIẢI ĐẤU CẦU LÔNG', margin, 11, { fontSize:9, color:[255,255,255], bold:false });
+    txt(tname, margin, 24, { fontSize:14, color:[255,255,255], bold:true });
+    txt('Ngày xuất: ' + new Date().toLocaleDateString('vi-VN'), W - margin, 24, { fontSize:8, color:[255,230,180], align:'right' });
+
+    y = 40;
+
+    // ── Thống kê ──
+    const players = tdata.players || [];
+    const numPlayers = players.length
+      || (tdata.knockoutSlots ? tdata.knockoutSlots.filter(s => s !== 'BYE').length : 0)
+      || (tdata.groups ? tdata.groups.reduce((a,g) => a+(g.players||g).length, 0) : 0);
+    const schedule = tdata.schedule || [];
+    const courts = [...new Set(schedule.map(r => r.san).filter(Boolean))];
+    const firstReport = reports.filter(r => r.start_time).sort((a,b) => new Date(a.start_time)-new Date(b.start_time))[0];
+    const lastReport  = reports.filter(r => r.end_time).sort((a,b) => new Date(b.end_time)-new Date(a.end_time))[0];
+    const startDate = firstReport ? new Date(firstReport.start_time).toLocaleDateString('vi-VN') : (tdata.date || '–');
+    const endDate   = lastReport  ? new Date(lastReport.end_time).toLocaleDateString('vi-VN')   : '–';
+    const totalSec = reports.reduce((a,r) => a+(r.total_elapsed||0), 0);
+    const totalMin = Math.round(totalSec/60);
+    const totalShuttle = reports.reduce((a,r) => a+(r.shuttle||0), 0);
+    const referees = [...new Set(reports.map(r => r.referee).filter(Boolean))];
+    const totalMatches = reports.length;
+
+    // Section header helper
+    function sectionHeader(title, yy) {
+      doc.setFillColor(50, 60, 80);
+      doc.rect(margin, yy, W-margin*2, 8, 'F');
+      txt(title, margin+4, yy+6, { fontSize:9, color:[255,255,255], bold:true });
+      return yy+12;
+    }
+
+    function statRow(label, value, yy) {
+      doc.setFillColor(248, 249, 252);
+      doc.rect(margin, yy-4, W-margin*2, 8, 'F');
+      txt(label, margin+4, yy, { fontSize:8.5, color:[80,80,80] });
+      txt(value, W-margin-4, yy, { fontSize:8.5, color:[20,20,20], bold:true, align:'right' });
+      return yy+9;
+    }
+
+    // ── Thông tin tổng quan ──
+    y = sectionHeader('THÔNG TIN TỔNG QUAN', y);
+    y = statRow('Hình thức', tdata.mode === 'knockout' ? 'Loại trực tiếp' : 'Vòng tròn', y);
+    y = statRow('Số VĐV tham gia', numPlayers + ' người', y);
+    y = statRow('Số trận đã đấu', totalMatches + ' trận', y);
+    y = statRow('Sân thi đấu', courts.length ? courts.map(c=>'Sân '+c).join(', ') : '–', y);
+    y = statRow('Ngày thi đấu', startDate + (endDate !== startDate && endDate !== '–' ? ' – ' + endDate : ''), y);
+    y = statRow('Tổng thời gian', totalMin + ' phút', y);
+    y = statRow('Tổng cầu sử dụng', totalShuttle + ' quả', y);
+    y += 6;
+
+    // ── Xếp hạng ──
+    let gold='–', silver='–', bronze1='–', bronze2='–';
+    if (tdata.mode === 'knockout') {
+      const kr = tdata.knockoutRounds || [];
+      const finalRes = tdata.knockoutResults && tdata.knockoutResults[(kr.length-1)+',0'];
+      if (finalRes) {
+        gold = finalRes.winner || '–';
+        const fn = kr[kr.length-1] && kr[kr.length-1][0];
+        silver = fn ? (finalRes.winner === fn.p1 ? fn.p2 : fn.p1) : '–';
+      }
+      if (tdata.show3rdPlace && tdata.knockoutResults && tdata.knockoutResults['3rd']) {
+        const r3 = tdata.knockoutResults['3rd'];
+        bronze1 = r3.winner || '–';
+        bronze2 = r3.winner === r3.p1 ? r3.p2 : r3.p1;
+      } else if (kr.length >= 2) {
+        const sfRound = kr[kr.length-2];
+        const res1 = tdata.knockoutResults && tdata.knockoutResults[(kr.length-2)+',0'];
+        const res2 = tdata.knockoutResults && tdata.knockoutResults[(kr.length-2)+',1'];
+        if (res1 && sfRound && sfRound[0]) bronze1 = res1.winner === sfRound[0].p1 ? sfRound[0].p2 : sfRound[0].p1;
+        if (res2 && sfRound && sfRound[1]) bronze2 = res2.winner === sfRound[1].p1 ? sfRound[1].p2 : sfRound[1].p1;
+      }
+    }
+
+    y = sectionHeader('XẾP HẠNG', y);
+    const has3rdMatch = tdata.show3rdPlace;
+    const rankRows = [
+      ['🥇 Vô địch (Huy chương Vàng)', gold],
+      ['🥈 Á quân (Huy chương Bạc)',   silver],
+      [has3rdMatch ? '🥉 Hạng ba (Huy chương Đồng)' : '🥉 Đồng hạng 3 (Huy chương Đồng)', bronze1],
+      [has3rdMatch ? '4. Hạng tư'                   : '🥉 Đồng hạng 3 (Huy chương Đồng)', bronze2],
+    ];
+    const rankColors = [[180,120,0],[100,100,100],[140,70,20],[80,80,80]];
+    rankRows.forEach(function(r, i) {
+      doc.setFillColor(i%2===0 ? 248 : 255, i%2===0 ? 249 : 255, i%2===0 ? 252 : 255);
+      doc.rect(margin, y-4, W-margin*2, 8, 'F');
+      txt(r[0], margin+4, y, { fontSize:8.5, color:rankColors[i], bold:true });
+      txt(r[1], W-margin-4, y, { fontSize:8.5, color:[20,20,20], bold:true, align:'right' });
+      y += 9;
+    });
+    y += 6;
+
+    // ── Trọng tài ──
+    if (referees.length) {
+      y = sectionHeader('TRỌNG TÀI THAM GIA', y);
+      referees.forEach(function(ref, i) {
+        doc.setFillColor(i%2===0 ? 248 : 255, i%2===0 ? 249 : 255, i%2===0 ? 252 : 255);
+        doc.rect(margin, y-4, W-margin*2, 8, 'F');
+        txt('• ' + ref, margin+4, y, { fontSize:8.5, color:[20,20,20] });
+        y += 9;
+      });
+      y += 6;
+    }
+
+    // ── Footer ──
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 285, W-margin, 285);
+    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    txt('BMT Tournament System  |  Xuất: ' + new Date().toLocaleString('vi-VN'), margin, 290, { fontSize:7, color:[150,150,150] });
+
+    const fname = 'BaoCao_' + tname.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') + '.pdf';
+    doc.save(fname);
+  } catch(e) {
+    hideLoading();
+    alert('Loi xuat bao cao: ' + e.message);
+    console.error(e);
+  }
+}
+
 async function renderTournamentAdminList() {
   const el = document.getElementById('tournamentAdminList');
   el.innerHTML = '<div class="tournament-empty">⏳ Đang tải...</div>';
@@ -1884,6 +2031,7 @@ async function renderTournamentAdminList() {
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn-save-score" onclick="loadTournament('${t.id}')">📂 Tải</button>
+          <button class="btn-save-score" style="background:rgba(139,92,246,.15);color:#8b5cf6;border-color:rgba(139,92,246,.3)" onclick="exportTournamentReport('${t.id}','${t.name.replace(/'/g,"\\'")}')">📊 Báo cáo</button>
           <button class="btn-del" onclick="deleteTournament('${t.id}')">🗑 Xóa</button>
         </div>
       </div>`).join('');
@@ -3066,6 +3214,7 @@ async function renderKOMatchesTable(container) {
     } else {
       scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">${scoreCell.replace(/^<td[^>]*>/,'').replace(/<\/td>$/,'')}</td>`;
     }
+    const report = _cachedReports[aKey];
     html += `<tr id="liveRow_${safeKey}">
       <td><span class="badge">#${matchNo}</span></td>
       <td>${san}</td>
@@ -3075,7 +3224,7 @@ async function renderKOMatchesTable(container) {
       ${scoreTd}
       <td class="${p2Class}">${p2}</td>
       ${refCell}
-      ${canEdit ? '<td></td>' : ''}
+      ${canEdit ? `<td>${report ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${aKey}')">📄 Biên bản</button>` : ''}</td>` : ''}
     </tr>`;
   }
 
@@ -3154,6 +3303,7 @@ async function renderKOMatchesTable(container) {
       ${scoreFinal}
       <td class="${fp2Class}">${fp2}</td>
       ${refCellF}
+      ${canEdit ? `<td>${_cachedReports[aKeyF] ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${aKeyF}')">📄 Biên bản</button>` : ''}</td>` : ''}
     </tr></tbody></table>`;
   }
 
@@ -3239,6 +3389,7 @@ async function renderKOMatchesTable(container) {
         ${score3}
         <td class="${p2Class3}">${p2_3rd}</td>
         ${refCell3}
+        ${canEdit ? `<td>${_cachedReports['3rd'] ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('3rd')">📄 Biên bản</button>` : ''}</td>` : ''}
       </tr></tbody></table>`;
     }
   }
@@ -3327,6 +3478,7 @@ async function renderRRMatchesWithScore(container) {
     if (matches[0]?.san) html += `<th>Sân</th><th>Giờ</th>`;
     html += `<th>VĐV 1</th><th style="text-align:center">Tỉ số</th><th>VĐV 2</th>
       ${canEdit ? '<th style="text-align:center">Thao tác</th>' : ''}
+      ${canEdit ? '<th></th>' : ''}
     </tr></thead><tbody>`;
 
     matches.forEach((r, rowIdx) => {
@@ -3399,6 +3551,7 @@ async function renderRRMatchesWithScore(container) {
         }
       }
 
+      const rrReport = _cachedReports[rrMatchKey];
       html += `<tr id="liveRow_${rrSafeKey}">
         <td style="color:var(--muted);font-size:11px">${pairIdx + 1}</td>`;
       if (r.san) html += `<td>${r.san}</td><td><strong style="color:var(--accent)">${r.time}</strong></td>`;
@@ -3406,6 +3559,7 @@ async function renderRRMatchesWithScore(container) {
         ${scoreTd}
         <td class="${p2Class}">${p2}</td>
         ${assignCell}
+        ${canEdit ? `<td>${rrReport ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${rrMatchKey}')">📄 Biên bản</button>` : ''}</td>` : ''}
       </tr>`;
     });
 
@@ -4441,8 +4595,9 @@ function refSetMaxSets(n) {
 }
 
 function refStart() {
-  REF.maxSets = REF.maxSets || S.maxSets || 3; // giữ giá trị đã chọn
+  REF.maxSets = REF.maxSets || S.maxSets || 3;
   REF.started = true;
+  REF.startTime = new Date().toISOString();
   REF.pointLog = [];
   REF.setTimes = [];
   REF.setStartElapsed = 0;
@@ -4946,6 +5101,24 @@ function openScoreInput(ri, mi) {
     + '</div>';
 }
 
+function downloadMatchReport(matchKey) {
+  const r = _cachedReports[matchKey];
+  if (!r) { alert('Không tìm thấy biên bản.'); return; }
+  generateMatchPDF({
+    matchLabel: r.match_label || matchKey,
+    referee: r.referee || '',
+    name1: r.name1 || '',
+    name2: r.name2 || '',
+    sets: r.sets || [],
+    setTimes: r.set_times || [],
+    pointLog: r.point_log || [],
+    shuttle: r.shuttle || 0,
+    totalElapsed: r.total_elapsed || 0,
+    startTime: r.start_time || null,
+    endTime: r.end_time || null,
+  }, true);
+}
+
 function openRRScoreInput(safeGName, pairIdx) {
   const existing = document.getElementById('scoreInputOverlay');
   if (existing) existing.remove();
@@ -5222,10 +5395,31 @@ async function refEndMatch() {
       pointLog: REF.pointLog,
       shuttle: REF.shuttle,
       totalElapsed: REF.elapsed,
-    });
+    }, false); // false = không tự tải, lưu lên cloud
+
+    // Lưu biên bản lên Supabase để manager tải
+    const reportData = {
+      tournament_id: asgn.tournament_id,
+      match_key: asgn.match_key,
+      match_label: asgn.match_label || asgn.match_key,
+      referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || '',
+      name1: REF.name1a + (REF.name1b ? ' / ' + REF.name1b : ''),
+      name2: REF.name2a + (REF.name2b ? ' / ' + REF.name2b : ''),
+      sets: REF.sets,
+      set_times: REF.setTimes,
+      point_log: REF.pointLog,
+      shuttle: REF.shuttle,
+      total_elapsed: REF.elapsed,
+      start_time: REF.startTime || null,
+      end_time: new Date().toISOString(),
+      winner: winner,
+      created_at: new Date().toISOString(),
+    };
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
+      .then(function(r) { if (r.error) console.warn('saveReport:', r.error); });
 
     document.getElementById('refScreen').classList.add('hidden');
-    alert('🏆 Tran ket thuc! ' + (winner ? winner + ' thang ' + totalW1 + '-' + totalW2 + ' set.' : 'Hoa.') + '\n📄 PDF bien ban da duoc tai xuong.');
+    alert('🏆 Trận kết thúc! ' + (winner ? winner + ' thắng ' + totalW1 + '-' + totalW2 + ' set.' : 'Hòa.') + '\n📋 Biên bản đã lưu, quản lý tải về từ danh sách trận.');
     REF.assignment = null;
     showRefWaiting();
   } catch(e) {
@@ -5235,7 +5429,7 @@ async function refEndMatch() {
 }
 
 // ── Xuất PDF tổng hợp trận đấu ───────────────────────────────────
-function generateMatchPDF(matchData) {
+function generateMatchPDF(matchData, autoDownload) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
@@ -5303,6 +5497,24 @@ function generateMatchPDF(matchData) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
   doc.text('Tong thoi gian', W - margin, 31, { align: 'right' });
+
+  // Giờ bắt đầu và kết thúc
+  if (matchData.startTime || matchData.endTime) {
+    const fmt = function(iso) {
+      if (!iso) return '–';
+      const d = new Date(iso);
+      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    };
+    const fmtDate = function(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('vi-VN');
+    };
+    doc.setTextColor(...C.muted);
+    doc.setFontSize(7.5);
+    doc.text(fmt(matchData.startTime) + ' - ' + fmt(matchData.endTime), W - margin, 37, { align: 'right' });
+    doc.text(fmtDate(matchData.startTime), W - margin, 42, { align: 'right' });
+  }
 
   y = 46;
 
@@ -5470,7 +5682,8 @@ function generateMatchPDF(matchData) {
   }
 
   const fname = 'BienBan_' + vn(matchData.matchLabel || 'Tran').replace(/\s+/g,'_') + '.pdf';
-  doc.save(fname);
+  if (autoDownload !== false) doc.save(fname);
+  return doc;
 }
 
 // Push live score to Supabase realtime
@@ -5504,12 +5717,17 @@ function updateShuttleCounter(matchKey, shuttle) {
 // ── Add assign button to KO matches table ──
 // Patched into renderKOMatchesTable via assignment data load
 let _cachedAssignments = {};
+let _cachedReports = {};
 async function loadAssignmentsForTable() {
   if (!S._tournamentId) return;
   try {
     const list = await getAssignmentsForTournament(S._tournamentId);
     _cachedAssignments = {};
     list.forEach(a => { _cachedAssignments[a.match_key] = a; });
+    // Load biên bản
+    const rRes = await getDB().from('bmt_match_reports').select('match_key,match_label,name1,name2,sets,set_times,point_log,shuttle,total_elapsed,winner,referee,start_time,end_time,created_at').eq('tournament_id', S._tournamentId);
+    _cachedReports = {};
+    if (rRes.data) rRes.data.forEach(r => { _cachedReports[r.match_key] = r; });
   } catch(e) { console.error(e); }
 }
 
