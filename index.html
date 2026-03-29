@@ -1121,7 +1121,7 @@
       <div class="field-label">Số bảng</div>
       <input type="number" id="numBang" min="1" max="16" value="4"/>
     </div>
-<div>
+    <div>
       <div class="field-label">Danh sách VĐV</div>
       <div class="hint" style="margin-bottom:5px">
         Mỗi dòng 1 VĐV. Định dạng: <code style="color:var(--accent)">Đơn vị - Tên</code><br/>
@@ -1129,24 +1129,40 @@
       </div>
       <textarea id="txtPlayers" placeholder="Ví dụ:&#10;VN - Nguyễn Văn A (1)&#10;VN - Trần Thị B (2)&#10;HN - Lê Văn C&#10;HCM - Phạm Thị D"></textarea>
     </div>
-    <button class="btn btn-primary" onclick="bocTham()">🎲 Bốc thăm</button>
-    <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="font-size:11px;color:var(--muted);white-space:nowrap">hoặc nhập tay</span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
+    <div id="matchTypeWrap" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:2px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">Hình thức thi đấu</div>
+      <div style="display:flex;gap:8px">
+        <button id="btnMatchSingle" class="ref-type-btn active" onclick="setMatchType('single')">🏸 Đơn</button>
+        <button id="btnMatchDouble" class="ref-type-btn" onclick="setMatchType('double')">🏸🏸 Đôi</button>
+      </div>
     </div>
-    <div id="manualBracketRow" style="display:none">
-      <div class="field-label">Tạo khung trống (nhập tay)</div>
-      <input id="selManualSize" type="number" min="2" max="128" value="8" placeholder="Nhập số VĐV..."
-        style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:22px;font-weight:700;text-align:center;margin-bottom:6px;box-sizing:border-box"/>
-      <button class="btn btn-secondary" style="width:100%;padding:10px;font-size:14px" onclick="createManualBracket()">📋 Tạo khung</button>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Nhập số VĐV bất kỳ — ô còn thiếu sẽ tự điền BYE</div>
+    <div id="chk3rdPlaceWrap" style="display:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:2px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text)">
+        <input type="checkbox" id="chk3rdPlace" onchange="toggle3rdPlace(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"/>
+        <span>Có trận tranh hạng 3</span>
+      </label>
+    </div>
+    <button class="btn btn-primary" onclick="bocTham()">🎲 Bốc thăm</button>
+    <div id="manualEntrySection" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">hoặc nhập tay</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+      <div id="manualBracketRow">
+        <div class="field-label">Tạo khung trống (nhập tay)</div>
+        <input id="selManualSize" type="number" min="2" max="128" value="8" placeholder="Nhập số VĐV..."
+          style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:22px;font-weight:700;text-align:center;margin-bottom:6px;box-sizing:border-box"/>
+        <button class="btn btn-secondary" id="btnTaoKhung" style="width:100%;padding:10px;font-size:14px" onclick="createManualBracket()">📋 Tạo khung</button>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Nhập số VĐV bất kỳ — ô còn thiếu sẽ tự điền BYE</div>
+      </div>
     </div>
     <hr class="divider"/>
     <div id="knockoutActions" style="display:none">
       <div class="section-title">📋 Loại trực tiếp</div>
       <div style="display:flex;flex-direction:column;gap:7px">
         <button class="btn btn-secondary" onclick="showScheduleConfig('knockout')">📅 Xếp lịch thi đấu</button>
+        <button class="btn btn-secondary" onclick="openRoundSettings()">⚙️ Cài đặt số set theo vòng</button>
         <button class="btn btn-secondary" id="btnEditSlots" onclick="showManualSlotEditor()" style="display:none">✍️ Sửa tên VĐV trong sơ đồ</button>
         <div class="row2">
           <button class="btn btn-secondary btn-sm" onclick="zoomIn()">🔍 +</button>
@@ -1158,6 +1174,7 @@
       <div class="section-title">📋 Vòng tròn</div>
       <div style="display:flex;flex-direction:column;gap:7px">
         <button class="btn btn-secondary" onclick="showScheduleConfig('roundrobin')">📅 Xếp lịch thi đấu</button>
+        <button class="btn btn-secondary" onclick="openRoundSettings()">⚙️ Cài đặt số set theo vòng</button>
       </div>
     </div>
     <hr class="divider"/>
@@ -1475,6 +1492,15 @@ function lockBocTham() {
   if (btn) { btn.disabled = true; btn.innerHTML = '🔒 Đã bốc thăm'; btn.title = 'Giải đã được tải — khóa bốc thăm mới.'; }
   const tp = document.getElementById('txtPlayers'); if (tp) tp.disabled = true;
   const sm = document.getElementById('selMode'); if (sm) sm.disabled = true;
+  // Khoá khu vực tạo khung
+  const sizeInp = document.getElementById('selManualSize'); if (sizeInp) sizeInp.disabled = true;
+  const taoKhungBtn = document.getElementById('btnTaoKhung');
+  if (taoKhungBtn) { taoKhungBtn.disabled = true; taoKhungBtn.innerHTML = '🔒 Đã tạo khung'; }
+  // Khoá matchType
+  const mtS = document.getElementById('btnMatchSingle'); if (mtS) mtS.disabled = true;
+  const mtD = document.getElementById('btnMatchDouble'); if (mtD) mtD.disabled = true;
+  // Khoá checkbox hạng 3
+  const chk = document.getElementById('chk3rdPlace'); if (chk) chk.disabled = true;
   // Hiện nút sửa tên nếu là knockout
   const editBtn = document.getElementById('btnEditSlots');
   if (editBtn && S.mode === 'knockout') editBtn.style.display = 'block';
@@ -1493,6 +1519,11 @@ function resetDraw() {
   var _r=document.getElementById('btnResetDraw');if(_r)_r.style.display='none';
   var _t=document.getElementById('txtPlayers');if(_t){_t.disabled=false;_t.value='';}
   var _s=document.getElementById('selMode');if(_s){_s.disabled=false;_s.value='knockout';}
+  var _chk=document.getElementById('chk3rdPlace');if(_chk){_chk.disabled=false;_chk.checked=false;}
+  var _si=document.getElementById('selManualSize');if(_si)_si.disabled=false;
+  var _tk=document.getElementById('btnTaoKhung');if(_tk){_tk.disabled=false;_tk.innerHTML='📋 Tạo khung';}
+  var _ms=document.getElementById('btnMatchSingle');if(_ms){_ms.disabled=false;}
+  var _md=document.getElementById('btnMatchDouble');if(_md){_md.disabled=false;}
   document.getElementById('knockoutActions').style.display='none';
   document.getElementById('roundrobinActions').style.display='none';
   try { closeSidebar(); } catch(e) {}
@@ -1926,6 +1957,7 @@ const S = {
   zoom: 1.0,
   _scheduleTarget: null,
   showRRSchedule: false,
+  roundSettings: {}, // key: roundName → {maxSets: 1|3, minSetsToWin: 1|2}
 };
 
 function buildSnapshot() {
@@ -1938,6 +1970,9 @@ function buildSnapshot() {
     schedule: S.schedule, scheduleType: S.scheduleType,
     showRRSchedule: S.showRRSchedule, zoom: S.zoom,
     _tournamentOwner: S._tournamentOwner,
+    show3rdPlace: S.show3rdPlace || false,
+    matchType: S.matchType || 'single',
+    roundSettings: S.roundSettings || {},
   };
 }
 
@@ -2126,6 +2161,133 @@ function buildAllKnockoutMatches() {
   });
 }
 
+// Lấy cài đặt set cho 1 vòng (roundName)
+function getRoundSetting(roundName) {
+  const rs = S.roundSettings || {};
+  return rs[roundName] || { maxSets: 3, minSetsToWin: 2 }; // mặc định 3 set thắng 2
+}
+
+function openRoundSettings() {
+  const existing = document.getElementById('roundSettingsOverlay');
+  if (existing) existing.remove();
+
+  const roundNames = [];
+  if (S.mode === 'roundrobin') {
+    // Vòng tròn: dùng tên bảng
+    const groups = S.groups || [];
+    if (groups.length) {
+      groups.forEach(function(g) { roundNames.push(g.name || g); });
+    } else {
+      roundNames.push('Vòng tròn');
+    }
+  } else {
+    const rounds = S.knockoutRounds || [];
+    const totalRounds = rounds.length;
+    for (let r = 0; r < totalRounds; r++) {
+      roundNames.push(getKORoundNameByIndex(r, totalRounds));
+    }
+    if (S.show3rdPlace) roundNames.push('Hạng ba');
+  }
+
+  if (!roundNames.length) { alert('Chưa có giải đấu. Hãy bốc thăm trước.'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'roundSettingsOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:16px';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between';
+  const headerTitle = document.createElement('h3');
+  headerTitle.style.cssText = 'margin:0;font-size:16px';
+  headerTitle.textContent = '⚙️ Cài đặt số set theo vòng';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = 'background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1';
+  closeBtn.onclick = function() { document.getElementById('roundSettingsOverlay').remove(); };
+  header.appendChild(headerTitle);
+  header.appendChild(closeBtn);
+  box.appendChild(header);
+
+  const hint = document.createElement('div');
+  hint.style.cssText = 'font-size:12px;color:var(--muted)';
+  hint.textContent = 'Trọng tài sẽ bị chặn kết thúc trận khi chưa đủ set thắng theo cài đặt này.';
+  box.appendChild(hint);
+
+  roundNames.forEach(function(rn) {
+    const cfg = getRoundSetting(rn);
+    const row = document.createElement('div');
+    row.style.cssText = 'background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:14px';
+
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:10px;color:var(--accent)';
+    lbl.textContent = rn;
+    row.appendChild(lbl);
+
+    const controls = document.createElement('div');
+    controls.style.cssText = 'display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+
+    // Số set tối đa
+    const maxLabel = document.createElement('div');
+    maxLabel.style.cssText = 'font-size:12px;color:var(--muted);font-weight:600';
+    maxLabel.textContent = 'Số set:';
+    controls.appendChild(maxLabel);
+
+    [1, 3].forEach(function(v) {
+      const btn = document.createElement('button');
+      btn.className = 'ref-type-btn' + (cfg.maxSets === v ? ' active' : '');
+      btn.style.cssText = 'padding:6px 14px;font-size:13px';
+      btn.textContent = v + ' set';
+      btn.dataset.round = rn;
+      btn.dataset.type = 'maxSets';
+      btn.dataset.val = v;
+      btn.onclick = function() {
+        if (!S.roundSettings) S.roundSettings = {};
+        if (!S.roundSettings[rn]) S.roundSettings[rn] = { maxSets: 3, minSetsToWin: 2 };
+        S.roundSettings[rn].maxSets = v;
+        S.roundSettings[rn].minSetsToWin = Math.ceil(v / 2);
+        if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(function(){});
+        // Refresh
+        document.getElementById('roundSettingsOverlay').remove();
+        openRoundSettings();
+      };
+      controls.appendChild(btn);
+    });
+
+    // Thông tin thắng
+    const winInfo = document.createElement('div');
+    winInfo.style.cssText = 'font-size:11px;color:#22c55e;margin-top:6px';
+    const ms = cfg.maxSets, mw = cfg.minSetsToWin;
+    winInfo.textContent = ms === 1 ? '→ Thắng khi thắng 1 set' : '→ Thắng khi thắng ' + mw + '/' + ms + ' set';
+    row.appendChild(controls);
+    row.appendChild(winInfo);
+    box.appendChild(row);
+  });
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn';
+  saveBtn.style.cssText = 'width:100%;padding:12px;background:var(--accent);color:#000;font-weight:700;border:none;border-radius:10px;cursor:pointer';
+  saveBtn.textContent = '✓ Lưu cài đặt';
+  saveBtn.onclick = function() {
+    if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(function(){});
+    document.getElementById('roundSettingsOverlay').remove();
+  };
+  box.appendChild(saveBtn);
+}
+
+// Lấy tên vòng theo index (dùng cho openRoundSettings)
+function getKORoundNameByIndex(r, totalRounds) {
+  if (r === totalRounds - 1) return 'Chung kết';
+  if (r === totalRounds - 2) return 'Bán kết';
+  if (r === totalRounds - 3) return 'Tứ kết';
+  const slots = 2 << (totalRounds - 1 - r);
+  return 'Vòng 1/' + (slots / 2);
+}
+
 function getKORoundName(p) {
   if (p === 2) return 'Chung kết';
   if (p === 4) return 'Bán kết';
@@ -2134,14 +2296,32 @@ function getKORoundName(p) {
 }
 
 /* ── Xử lý kết quả knockout ── */
-function buildSetInputRows(type, id) {
+function buildSetInputRows(type, id, maxSets) {
   let html = '';
-  for (let i = 1; i <= 3; i++) {
+  const n = maxSets || 3;
+  for (let i = 1; i <= n; i++) {
     html += `<div class="set-row">
       <span class="set-label">S${i}</span>
       <input class="score-inp-sm" type="number" min="0" id="${type}s1_${id}_${i}" placeholder="–"/>
       <span class="score-dash">–</span>
       <input class="score-inp-sm" type="number" min="0" id="${type}s2_${id}_${i}" placeholder="–"/>
+    </div>`;
+  }
+  return html;
+}
+
+function buildSetInputRowsPrefilled(type, id, sets, maxSets) {
+  let html = '';
+  const n = maxSets || (sets ? Math.max(sets.length, 1) : 3);
+  for (let i = 1; i <= n; i++) {
+    const s = sets && sets[i-1];
+    const v1 = s !== undefined ? s.s1 : '';
+    const v2 = s !== undefined ? s.s2 : '';
+    html += `<div class="set-row">
+      <span class="set-label">S${i}</span>
+      <input class="score-inp-sm" type="number" min="0" id="${type}s1_${id}_${i}" placeholder="–" value="${v1}"/>
+      <span class="score-dash">–</span>
+      <input class="score-inp-sm" type="number" min="0" id="${type}s2_${id}_${i}" placeholder="–" value="${v2}"/>
     </div>`;
   }
   return html;
@@ -2180,8 +2360,12 @@ function saveKnockoutResult(ri, mi) {
   const w1 = sets.filter(s => s.s1 > s.s2).length;
   const w2 = sets.filter(s => s.s2 > s.s1).length;
   if (w1 === w2) { alert('Không thể hòa set trong vòng loại trực tiếp.'); return; }
-  const node = S.knockoutRounds[ri][mi];
-  const winner = w1 > w2 ? node.p1 : node.p2;
+  const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
+  const oldResult = S.knockoutResults[`${ri},${mi}`];
+  const schedItem = (S.schedule || []).find(r => (r.ri + ',' + r.mi) === ri + ',' + mi);
+  const np1 = (node && node.p1) || (oldResult && oldResult.winner) || (schedItem && schedItem.vdv1) || '?';
+  const np2 = (node && node.p2) || (schedItem && schedItem.vdv2) || '?';
+  const winner = w1 > w2 ? np1 : np2;
   const totS1 = sets.reduce((a, s) => a + s.s1, 0);
   const totS2 = sets.reduce((a, s) => a + s.s2, 0);
   S.knockoutResults[`${ri},${mi}`] = { s1: totS1, s2: totS2, w1, w2, sets, winner };
@@ -2194,17 +2378,8 @@ function saveKnockoutResult(ri, mi) {
 }
 
 function editKnockoutResult(ri, mi) {
-  const numRounds = S.knockoutRounds.length;
-  delete S.knockoutResults[`${ri},${mi}`];
-  for (let r = ri + 1; r < numRounds; r++)
-    for (let m = 0; m < (S.knockoutRounds[r]||[]).length; m++)
-      delete S.knockoutResults[`${r},${m}`];
-  rebuildKnockoutTree();
-  if (S._tournamentId) {
-    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('editKnockoutResult:', e));
-  }
-  renderContent();
-  if (S.schedule && S.schedule.length) showTab('matches');
+  // Mở popup sửa điểm với kết quả hiện tại điền sẵn — không xóa ngay
+  openScoreInput(ri, mi);
 }
 /* ════════════════════════════════════════
    ROUND ROBIN
@@ -2389,7 +2564,12 @@ function buildRRTimeline(pairsByGroup, courts, phut, start) {
 function onModeChange() {
   const mode = document.getElementById('selMode').value;
   document.getElementById('numBangRow').style.display = mode === 'roundrobin' ? 'block' : 'none';
-  document.getElementById('manualBracketRow').style.display = mode === 'knockout' ? 'block' : 'none';
+  const mes = document.getElementById('manualEntrySection');
+  if (mes) mes.style.display = mode === 'knockout' ? 'block' : 'none';
+  const w3rd = document.getElementById('chk3rdPlaceWrap');
+  if (w3rd) w3rd.style.display = mode === 'knockout' ? 'block' : 'none';
+  const mt = document.getElementById('matchTypeWrap');
+  if (mt) mt.style.display = 'block';
 }
 
 function msClose() { var el = document.getElementById('manualSlotEditor'); if (el) el.remove(); }
@@ -2627,6 +2807,14 @@ function applySchedule() {
 function renderContent() {
   const el = document.getElementById('content');
   el.innerHTML = '';
+  // Sync checkbox trận hạng 3
+  const chk = document.getElementById('chk3rdPlace');
+  if (chk) chk.checked = !!S.show3rdPlace;
+  // Sync matchType buttons
+  const btnS = document.getElementById('btnMatchSingle');
+  const btnD = document.getElementById('btnMatchDouble');
+  if (btnS) btnS.classList.toggle('active', S.matchType !== 'double');
+  if (btnD) btnD.classList.toggle('active', S.matchType === 'double');
   if (S.mode === 'knockout') renderKnockoutView(el);
   else renderRRView(el);
 }
@@ -2648,6 +2836,7 @@ function renderKnockoutView(container) {
   tabs.innerHTML = `
     <button class="tab active" id="tabBracket" onclick="showTab('bracket')">🏆 Sơ đồ bracket</button>
     ${hasSchedule ? `<button class="tab" id="tabMatches" onclick="showTab('matches')">📋 Danh sách trận</button>` : ''}
+    <button class="tab" id="tabRanking" onclick="showTab('ranking')">🥇 Xếp hạng</button>
     <div id="shuttleCounter" style="
       margin-left:auto; display:flex; align-items:center; gap:7px;
       background:var(--card); border:1px solid var(--border);
@@ -2688,18 +2877,108 @@ function renderKnockoutView(container) {
     container.appendChild(mDiv);
   }
 
+  // Tab xếp hạng
+  const rDiv = document.createElement('div'); rDiv.id = 'tabRankingContent'; rDiv.style.display = 'none';
+  renderKORanking(rDiv);
+  container.appendChild(rDiv);
+
   renderBracket();
 }
 
 function showTab(tab) {
   const bTab = document.getElementById('tabBracket');
   const mTab = document.getElementById('tabMatches');
+  const rTab = document.getElementById('tabRanking');
   if (bTab) bTab.classList.toggle('active', tab === 'bracket');
   if (mTab) mTab.classList.toggle('active', tab === 'matches');
+  if (rTab) rTab.classList.toggle('active', tab === 'ranking');
   const bc = document.getElementById('tabBracketContent');
   const mc = document.getElementById('tabMatchesContent');
+  const rc = document.getElementById('tabRankingContent');
   if (bc) bc.style.display = tab === 'bracket' ? '' : 'none';
   if (mc) mc.style.display = tab === 'matches' ? '' : 'none';
+  if (rc) { rc.style.display = tab === 'ranking' ? '' : 'none'; if (tab === 'ranking') renderKORanking(rc); }
+}
+
+function setMatchType(type) {
+  S.matchType = type;
+  const btnS = document.getElementById('btnMatchSingle');
+  const btnD = document.getElementById('btnMatchDouble');
+  if (btnS) btnS.classList.toggle('active', type === 'single');
+  if (btnD) btnD.classList.toggle('active', type === 'double');
+  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(function(){});
+}
+
+function toggle3rdPlace(checked) {
+  S.show3rdPlace = checked;
+  const chk = document.getElementById('chk3rdPlace');
+  if (chk) chk.checked = checked;
+  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
+  renderContent();
+}
+
+function renderKORanking(container) {
+  container.innerHTML = '';
+  const rounds = S.knockoutRounds;
+  if (!rounds || rounds.length === 0) {
+    container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Chưa có kết quả để xếp hạng.</div>';
+    return;
+  }
+  const totalRounds = rounds.length;
+  const finalRound = rounds[totalRounds - 1];
+  const finalNode = finalRound && finalRound[0];
+  const finalResult = S.knockoutResults[`${totalRounds-1},0`];
+  const gold   = finalResult ? finalResult.winner : null;
+  const silver = finalResult ? (finalResult.winner === finalNode.p1 ? finalNode.p2 : finalNode.p1) : null;
+
+  // Hạng 3
+  let bronze1 = null, bronze2 = null;
+  const sfRound = totalRounds >= 2 ? rounds[totalRounds - 2] : null;
+  if (sfRound && sfRound.length >= 2) {
+    const res1 = S.knockoutResults[`${totalRounds-2},0`];
+    const res2 = S.knockoutResults[`${totalRounds-2},1`];
+    const sf1  = sfRound[0], sf2 = sfRound[1];
+    const loser1 = res1 ? (res1.winner === sf1.p1 ? sf1.p2 : sf1.p1) : null;
+    const loser2 = res2 ? (res2.winner === sf2.p1 ? sf2.p2 : sf2.p1) : null;
+    if (S.show3rdPlace) {
+      const res3rd = S.knockoutResults['3rd'];
+      bronze1 = res3rd ? res3rd.winner : null;
+      bronze2 = res3rd ? (res3rd.winner === res3rd.p1 ? res3rd.p2 : res3rd.p1) : null;
+    } else {
+      bronze1 = loser1; bronze2 = loser2;
+    }
+  }
+
+  function medalRow(rank, medal, name) {
+    if (!name) return `<tr><td>${medal}</td><td style="color:var(--muted);font-style:italic">Chưa xác định</td></tr>`;
+    return `<tr>
+      <td style="font-weight:700;font-size:15px">${medal}</td>
+      <td style="font-weight:700;font-size:15px;color:var(--text)">${name}</td>
+    </tr>`;
+  }
+
+  const has3rdMatch = S.show3rdPlace;
+  let html = `<div style="padding:20px">
+    <h3 style="margin-bottom:16px">🏅 Bảng xếp hạng – Loại trực tiếp</h3>
+    <table class="ranking-table" style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;padding:10px 14px;background:rgba(255,255,255,.05);border-bottom:1px solid var(--border)">Hạng</th>
+        <th style="text-align:left;padding:10px 14px;background:rgba(255,255,255,.05);border-bottom:1px solid var(--border)">VĐV</th>
+      </tr></thead>
+      <tbody style="font-size:14px">`;
+
+  html += medalRow(1, '🥇 Vô địch', gold);
+  html += medalRow(2, '🥈 Á quân', silver);
+  if (has3rdMatch) {
+    html += medalRow(3, '🥉 Hạng ba', bronze1);
+    html += medalRow(4, '🎖️ Hạng tư', bronze2);
+  } else {
+    html += medalRow('3=', '🥉 Đồng hạng', bronze1);
+    html += medalRow('3=', '🥉 Đồng hạng', bronze2);
+  }
+
+  html += `</tbody></table></div>`;
+  container.innerHTML = html;
 }
 
 /* ── KO Matches table with score input ── */
@@ -2748,14 +3027,11 @@ async function renderKOMatchesTable(container) {
         ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
         ${canEdit ? `<button class="btn-edit-score" onclick="editKnockoutResult(${ri},${mi})">✏️</button>` : ''}
       </td>`;
-    } else if (canEdit && isReal) {
-      scoreCell = `<td><div class="sets-input-wrap" id="kswrap_${ri}_${mi}">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Để trống set không đấu</div>
-        ${buildSetInputRows('ko', ri+'_'+mi)}
-        <div style="margin-top:4px">
-          <button class="btn-save-score" onclick="saveKnockoutResult(${ri},${mi})">✓ Lưu</button>
-        </div>
-      </div></td>`;
+    } else if (canEdit) {
+      scoreCell = `<td id="liveScore_${ri}_${mi}" style="text-align:center">
+        <span style="color:var(--muted);font-size:12px">–</span>
+        <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput(${ri},${mi})">✏️</button>
+      </td>`;
     } else {
       scoreCell = `<td style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
     }
@@ -2769,6 +3045,7 @@ async function renderKOMatchesTable(container) {
         refCell = `<td class="ref-info-cell">
           <span class="assigned-badge">🟠 ${asgn.referee}</span>
           <button class="btn-assign" style="margin-left:4px" onclick="openAssignModal(${ri},${mi},${matchNo},'${p1.replace(/'/g,"\'")}','${p2.replace(/'/g,"\'")}')">✏️</button>
+          <button class="btn-assign" style="margin-left:2px;background:rgba(239,68,68,.15);color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="cancelAssignment('${asgn.id}')">✕</button>
         </td>`;
       } else if (asgn && asgn.status === 'done') {
         refCell = `<td class="ref-info-cell"><span style="color:var(--muted);font-size:11px">✅ ${asgn.referee}</span></td>`;
@@ -2823,6 +3100,7 @@ async function renderKOMatchesTable(container) {
     const asgnF = _cachedAssignments[aKeyF];
 
     let scoreFinal = '';
+    const hasActiveRefF = asgnF && asgnF.status !== 'done';
     if (fResult) {
       const w1f = fResult.w1 !== undefined ? fResult.w1 : fResult.s1;
       const w2f = fResult.w2 !== undefined ? fResult.w2 : fResult.s2;
@@ -2830,26 +3108,30 @@ async function renderKOMatchesTable(container) {
         ? fResult.sets.map((s,i) => `<div class="set-score-line">S${i+1}: ${s.s1}–${s.s2}</div>`).join('') : '';
       const mainF = fResult.sets && fResult.sets.length === 1
         ? `${fResult.sets[0].s1}–${fResult.sets[0].s2}` : `${w1f}–${w2f} set`;
-      scoreFinal = `<td style="text-align:center">
+      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center">
         <span class="score-done">${mainF}</span>
         ${setsHtmlF ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtmlF}</div>` : ''}
         ${canEdit ? `<button class="btn-edit-score" onclick="editKnockoutResult(${ri},${mi})">✏️</button>` : ''}
       </td>`;
-    } else if (canEdit && fIsReal) {
-      scoreFinal = `<td><div class="sets-input-wrap" id="kswrap_${safeKeyF}">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Để trống set không đấu</div>
-        ${buildSetInputRows('ko', safeKeyF)}
-        <div style="margin-top:4px"><button class="btn-save-score" onclick="saveKnockoutResult(${ri},${mi})">✓ Lưu</button></div>
-      </div></td>`;
+    } else if (hasActiveRefF) {
+      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center;color:var(--muted);font-size:12px">
+        <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
+      </td>`;
+    } else if (canEdit) {
+      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center">
+        <span style="color:var(--muted);font-size:12px">–</span>
+        <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput(${ri},${mi})">✏️</button>
+      </td>`;
     } else {
-      scoreFinal = `<td style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
     }
 
     let refCellF = '';
     if (canAssign) {
       if (asgnF && asgnF.status !== 'done') {
         refCellF = `<td class="ref-info-cell"><span class="assigned-badge">🟠 ${asgnF.referee}</span>
-          <button class="btn-assign" style="margin-left:4px" onclick="openAssignModal(${ri},${mi},${matchNo},'${fp1.replace(/'/g,"\\'")}','${fp2.replace(/'/g,"\\'")}')">✏️</button></td>`;
+          <button class="btn-assign" style="margin-left:4px" onclick="openAssignModal(${ri},${mi},${matchNo},'${fp1.replace(/'/g,"\\'")}','${fp2.replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn-assign" style="margin-left:2px;background:rgba(239,68,68,.15);color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="cancelAssignment('${asgnF.id}')">✕</button></td>`;
       } else if (asgnF && asgnF.status === 'done') {
         refCellF = `<td class="ref-info-cell"><span style="color:var(--muted);font-size:11px">✅ ${asgnF.referee}</span></td>`;
       } else {
@@ -2878,8 +3160,8 @@ async function renderKOMatchesTable(container) {
   // ── Trận tranh hạng 3 (thua bán kết) ──
   const rounds = S.knockoutRounds;
   const totalRounds = rounds.length;
-  if (totalRounds >= 3 && S.show3rdPlace !== false) {
-    // Bán kết = vòng totalRounds-2 (index từ 0)
+  if (totalRounds >= 2 && S.show3rdPlace !== false) {
+    // Bán kết = vòng totalRounds-2 (index từ 0), với 4 VĐV thì totalRounds=2 → index 0
     const sfRound = rounds[totalRounds - 2];
     if (sfRound && sfRound.length >= 2) {
       const sf1 = sfRound[0]; // bán kết 1
@@ -2889,8 +3171,8 @@ async function renderKOMatchesTable(container) {
       // Thua bán kết 1 và 2
       const loser1 = res1 ? (res1.winner === sf1.p1 ? sf1.p2 : sf1.p1) : null;
       const loser2 = res2 ? (res2.winner === sf2.p1 ? sf2.p2 : sf2.p1) : null;
-      const p1_3rd = loser1 || (sf1.p1 && !String(sf1.p1).startsWith('Thắng') ? sf1.p1 : 'Thua BK 1');
-      const p2_3rd = loser2 || (sf2.p1 && !String(sf2.p1).startsWith('Thắng') ? sf2.p1 : 'Thua BK 2');
+      const p1_3rd = loser1 || 'Thua trận 1';
+      const p2_3rd = loser2 || 'Thua trận 2';
       const result3 = S.knockoutResults['3rd'];
 
       let p1Class3 = '', p2Class3 = '';
@@ -2898,6 +3180,9 @@ async function renderKOMatchesTable(container) {
         p1Class3 = result3.winner === p1_3rd ? 'winner-name' : 'loser-name';
         p2Class3 = result3.winner === p2_3rd ? 'winner-name' : 'loser-name';
       }
+
+      const asgn3rd = _cachedAssignments['3rd'];
+      const hasActiveRef3 = asgn3rd && asgn3rd.status !== 'done';
 
       let score3 = '';
       if (result3) {
@@ -2907,37 +3192,53 @@ async function renderKOMatchesTable(container) {
           ? result3.sets.map((s, i) => `<div class="set-score-line">S${i+1}: ${s.s1}–${s.s2}</div>`).join('') : '';
         const main = result3.sets && result3.sets.length === 1
           ? `${result3.sets[0].s1}–${result3.sets[0].s2}` : `${w1}–${w2} set`;
-        score3 = `<td style="text-align:center">
+        score3 = `<td id="liveScore_3rd" style="text-align:center">
           <span class="score-done">${main}</span>
           ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-          ${canEdit ? `<button class="btn-edit-score" onclick="edit3rdResult()">✏️</button>` : ''}
+          ${canEdit ? `<button class="btn-edit-score" onclick="edit3rdResult()">&#9999;&#65039;</button>` : ''}
+        </td>`;
+      } else if (hasActiveRef3) {
+        score3 = `<td id="liveScore_3rd" style="text-align:center;color:var(--muted);font-size:12px">
+          <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
         </td>`;
       } else if (canEdit) {
-        score3 = `<td><div class="sets-input-wrap" id="kswrap_3rd">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Để trống set không đấu</div>
-          ${buildSetInputRows('ko', '3rd')}
-          <div style="margin-top:4px">
-            <button class="btn-save-score" onclick="save3rdResult('${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}')">✓ Lưu</button>
-          </div>
-        </div></td>`;
+        score3 = `<td id="liveScore_3rd" style="text-align:center">
+          <span style="color:var(--muted);font-size:12px">–</span>
+          <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput3rd('${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}')">✏️</button>
+        </td>`;
       } else {
-        score3 = `<td style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+        score3 = `<td id="liveScore_3rd" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
       }
 
-      html += `<h3 style="margin-top:20px">🥉 Tranh hạng ba</h3>
+      let refCell3 = '';
+      if (canAssign) {
+        if (asgn3rd && asgn3rd.status !== 'done') {
+          refCell3 = `<td class="ref-info-cell">
+            <span class="assigned-badge">&#128992; ${asgn3rd.referee}</span>
+            <button class="btn-assign" style="margin-left:4px" onclick="openAssignModal(-1,-1,0,'${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}','3rd')">&#9999;&#65039;</button>
+            <button class="btn-assign" style="margin-left:2px;background:rgba(239,68,68,.15);color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="cancelAssignment('${asgn3rd.id}')">&#10005;</button>
+          </td>`;
+        } else if (asgn3rd && asgn3rd.status === 'done') {
+          refCell3 = `<td class="ref-info-cell"><span style="color:var(--muted);font-size:11px">&#9989; ${asgn3rd.referee}</span></td>`;
+        } else {
+          refCell3 = `<td><button class="btn-assign" onclick="openAssignModal(-1,-1,0,'${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}','3rd')">+ Phân công</button></td>`;
+        }
+      }
+
+      html += `<h3 style="margin-top:20px">&#129350; Tranh hạng ba</h3>
       <table><thead><tr>
         <th>Trận</th><th>Sân</th><th>Vòng</th>
         <th>VĐV 1</th><th style="text-align:center">Tỉ số</th><th>VĐV 2</th>
         ${canAssign ? '<th style="text-align:center">Trọng tài</th>' : ''}
       </tr></thead><tbody>
-      <tr>
-        <td><span class="badge" style="background:#cd7f32">#3P</span></td>
+      <tr id="liveRow_3rd">
+        <td><span class="badge" style="background:#cd7f32">#${(S.schedule||[]).find(r=>r.roundName==='Chung kết') ? (S.schedule.find(r=>r.roundName==='Chung kết').matchNo + 1) : '3P'}</span></td>
         <td>–</td>
         <td style="font-size:12px;color:var(--muted)">Hạng ba</td>
         <td class="${p1Class3}">${p1_3rd}</td>
         ${score3}
         <td class="${p2Class3}">${p2_3rd}</td>
-        ${canAssign ? `<td><button class="btn-assign" onclick="openAssignModal(-1,-1,0,'${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}','3rd')">+ Phân công</button></td>` : ''}
+        ${refCell3}
       </tr></tbody></table>`;
     }
   }
@@ -3065,22 +3366,17 @@ async function renderRRMatchesWithScore(container) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
           <span class="score-done">${mainScore}</span>
           ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-          ${canEdit ? `<button class="btn-edit-score" onclick="editRRResult('${safeGName}',${pairIdx})">✏️</button>` : ''}
+          ${canEdit ? `<button class="btn-edit-score" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>` : ''}
         </td>`;
       } else if (hasActiveRef) {
-        // Có trọng tài đang chấm → ẩn ô nhập, hiện live
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted)">
           <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ ĐANG DIỄN RA</span>
         </td>`;
       } else if (canEdit) {
-        const safeId = gName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + pairIdx;
-        scoreTd = `<td id="liveScore_${rrSafeKey}"><div class="sets-input-wrap" id="rrswrap_${safeId}">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Để trống set không đấu</div>
-          ${buildSetInputRows('rr', safeId)}
-          <div style="margin-top:4px">
-            <button class="btn-save-score" onclick="saveRRResult('${safeGName}',${pairIdx})">✓ Lưu</button>
-          </div>
-        </div></td>`;
+        scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
+          <span style="color:var(--muted);font-size:12px">–</span>
+          <button class="btn-edit-score" style="margin-left:6px" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>
+        </td>`;
       } else {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
       }
@@ -3094,6 +3390,7 @@ async function renderRRMatchesWithScore(container) {
           assignCell = `<td class="ref-info-cell">
             <span class="assigned-badge">🟠 ${rrAssignment.referee}</span>
             <button class="btn-assign" style="margin-left:4px;font-size:10px" onclick="openAssignModal(0,0,${rrMatchNo},'${p1.replace(/'/g,"\\'")}','${p2.replace(/'/g,"\\'")}','${rrMatchKey}')">✏️</button>
+            <button class="btn-assign" style="margin-left:2px;font-size:10px;background:rgba(239,68,68,.15);color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="cancelAssignment('${rrAssignment.id}')">✕</button>
           </td>`;
         } else {
           assignCell = `<td style="text-align:center">
@@ -3611,6 +3908,28 @@ async function saveAssignment(a) {
   const { error } = await getDB().from('bmt_assignments').upsert(a, { onConflict: 'id' });
   if (error) throw error;
 }
+async function deleteAssignment(id) {
+  const { error } = await getDB().from('bmt_assignments').delete().eq('id', id);
+  if (error) throw error;
+}
+async function cancelAssignment(id) {
+  if (!confirm('Xóa phân công trọng tài này?')) return;
+  showLoading('Đang xóa...');
+  try {
+    await deleteAssignment(id);
+    // Xóa khỏi cache local
+    for (const key in _cachedAssignments) {
+      if (_cachedAssignments[key] && _cachedAssignments[key].id === id) {
+        delete _cachedAssignments[key];
+      }
+    }
+    hideLoading();
+    renderContent();
+  } catch(e) {
+    hideLoading();
+    alert('❌ Lỗi xóa: ' + e.message);
+  }
+}
 async function getMyAssignment(username) {
   const { data, error } = await getDB()
     .from('bmt_assignments')
@@ -3818,12 +4137,7 @@ async function checkAndShowRefScreen() {
       document.getElementById('refScreen').classList.remove('hidden');
       document.getElementById('refMatchLabel').textContent = assignment.match_label || 'Trận đấu';
       document.getElementById('refShuttleCount').textContent = REF.shuttle;
-      document.getElementById('refActionBtns').innerHTML = `
-        <button class="btn-call-shuttle" onclick="refCallHelp('shuttle')">🏸 Thêm cầu</button>
-        <button class="btn-call-chief" onclick="refCallHelp('chief')">📣 Tổng trọng tài</button>
-        <button class="btn-end-set" onclick="refEndSet()">⏹ Kết thúc Set</button>
-        <button class="btn-end-match" onclick="refEndMatch()">🏁 Kết thúc Trận</button>
-      `;
+      buildRefActionBtns();
       // Khôi phục timer
       clearInterval(REF.timerInterval);
       REF.timerInterval = setInterval(() => {
@@ -3872,30 +4186,80 @@ const REF = {
 };
 
 // ── Setup modal ──────────────────────────
+function parsePlayerName(raw) {
+  // Tách tên từ chuỗi dạng: "Đơn vị - Tên1 - Tên2 (hạt giống)" hoặc "Tên1 - Tên2"
+  // Trả về { names: [tên1, tên2, ...], unit: 'Đơn vị' }
+  if (!raw) return { names: [], unit: '' };
+  const cleaned = raw.replace(/\s*\(\d+\)\s*$/, '').trim(); // bỏ (1), (2)...
+  const parts = cleaned.split('-').map(function(p){ return p.trim(); }).filter(Boolean);
+  // Phát hiện đơn vị: nếu parts[0] có ≥2 chữ hoa viết tắt hoặc ngắn ≤5 ký tự thì là đơn vị
+  if (parts.length >= 2) {
+    const maybeUnit = parts[0];
+    // Đơn vị thường là chữ viết tắt (VD: VN, HN, CNHH,TP) hoặc ≤6 ký tự không có dấu cách
+    const isUnit = maybeUnit.length <= 6 || /^[A-Z,]+$/.test(maybeUnit.replace(/\s/g,''));
+    if (isUnit && parts.length >= 3) {
+      return { names: parts.slice(1), unit: maybeUnit };
+    } else if (isUnit) {
+      return { names: [parts.slice(1).join(' ')], unit: maybeUnit };
+    }
+  }
+  return { names: parts, unit: '' };
+}
+
 function refOpenSetup() {
   if (!REF.assignment) return;
   const a = REF.assignment;
-  document.getElementById('refName1a').value = a.vdv1 || '';
-  document.getElementById('refName2a').value = a.vdv2 || '';
-  document.getElementById('refName1b').value = '';
-  document.getElementById('refName2b').value = '';
-  refSetType('single');
-  // Default maxSets = 3
-  REF.maxSets = 3;
-  refSetMaxSets(3);
+  const isDouble = S.matchType === 'double';
+
+  function splitName(raw) {
+    if (!raw) return ['', ''];
+    var cleaned = raw.replace(/\s*\(\d+\)\s*$/, '').trim();
+    var parts = cleaned.split('-').map(function(p){ return p.trim(); }).filter(Boolean);
+    if (!isDouble) {
+      return [parts.length >= 2 ? parts[parts.length - 1] : parts[0], ''];
+    } else {
+      if (parts.length >= 3) return [parts[parts.length - 2], parts[parts.length - 1]];
+      if (parts.length === 2) return [parts[0], parts[1]];
+      return [parts[0], ''];
+    }
+  }
+
+  var n1 = splitName(a.vdv1);
+  var n2 = splitName(a.vdv2);
+  document.getElementById('refName1a').value = n1[0];
+  document.getElementById('refName1b').value = n1[1];
+  document.getElementById('refName2a').value = n2[0];
+  document.getElementById('refName2b').value = n2[1];
+  refSetType(isDouble ? 'double' : 'single');
+
+  var schedO = null;
+  var roundO = '';
+  if (a.match_key === '3rd') {
+    roundO = 'Hạng ba';
+  } else if (a.match_key && a.match_key.startsWith('rr::')) {
+    var rrParts = a.match_key.split('::');
+    roundO = rrParts[1] || 'Vòng tròn'; // tên bảng
+  } else {
+    schedO = (S.schedule || []).find(function(r) {
+      return (r.ri + ',' + r.mi) === a.match_key;
+    });
+    roundO = schedO ? schedO.roundName : (a.match_label || '');
+  }
+  var rsO = getRoundSetting(roundO);
+  REF.maxSets = rsO.maxSets || 3;
+
   document.getElementById('refSetupOverlay').classList.remove('hidden');
 }
 
 function refSetType(type) {
   REF.isDouble = type === 'double';
-  document.getElementById('refTypeSingle').classList.toggle('active', type === 'single');
-  document.getElementById('refTypeDouble').classList.toggle('active', type === 'double');
+  // Toggle buttons đã bị xóa — chỉ cập nhật UI ô nhập tên
+  const s = document.getElementById('refTypeSingle'); if (s) s.classList.toggle('active', type === 'single');
+  const d = document.getElementById('refTypeDouble'); if (d) d.classList.toggle('active', type === 'double');
   document.getElementById('refName1bWrap').style.display = REF.isDouble ? '' : 'none';
   document.getElementById('refName2bWrap').style.display = REF.isDouble ? '' : 'none';
-  // Luôn hiện chọn người giao (cả đơn lẫn đôi)
   document.getElementById('refServeSelectWrap').style.display = '';
-  // Ẩn cột nhận khi đơn
-  const receiveCol = document.getElementById('refReceiveGrid')?.parentElement;
+  const receiveCol = document.getElementById('refReceiveGrid') ? document.getElementById('refReceiveGrid').parentElement : null;
   if (receiveCol) receiveCol.style.display = REF.isDouble ? '' : 'none';
   buildServeGrid();
 }
@@ -3954,6 +4318,11 @@ function pickServer(id) {
 function pickReceiver(id) {
   REF.firstReceiver = id;
   _highlightBtn('rp_', id, '#ef4444', 'rgba(239,68,68,.15)');
+}
+
+function refSetupSetMaxSets(n) {
+  REF.maxSets = n;
+  // Buttons đã bị xóa khỏi setup overlay — chỉ lưu giá trị
 }
 
 function refSetupConfirm() {
@@ -4085,12 +4454,7 @@ function refStart() {
     const s = String(REF.elapsed % 60).padStart(2,'0');
     document.getElementById('refTimer').textContent = m + ':' + s;
   }, 1000);
-  document.getElementById('refActionBtns').innerHTML = `
-    <button class="btn-call-shuttle" onclick="refCallHelp('shuttle')">🏸 Thêm cầu</button>
-    <button class="btn-call-chief" onclick="refCallHelp('chief')">📣 Tổng trọng tài</button>
-    <button class="btn-end-set" onclick="refEndSet()">⏹ Kết thúc Set</button>
-    <button class="btn-end-match" onclick="refEndMatch()">🏁 Kết thúc Trận</button>
-  `;
+  buildRefActionBtns();
   updateRefUI();
   if (REF.isDouble) initServeState();
   else {
@@ -4350,12 +4714,39 @@ function updateRefUI() {
   }).join('');
 }
 
+function buildRefActionBtns() {
+  // Lấy maxSets từ round settings
+  const asgnB = REF.assignment;
+  const schedB = asgnB ? (S.schedule || []).find(function(r) {
+    if (asgnB.match_key === '3rd' || asgnB.match_key.startsWith('rr::')) return false;
+    return (r.ri + ',' + r.mi) === asgnB.match_key;
+  }) : null;
+  const roundB = asgnB && asgnB.match_key === '3rd' ? 'Hạng ba'
+    : (schedB ? schedB.roundName : (asgnB ? asgnB.match_label : ''));
+  const rsB = getRoundSetting(roundB);
+  const maxSetsB = rsB.maxSets || 3;
+  const minWinB  = rsB.minSetsToWin || Math.ceil(maxSetsB / 2);
+
+  // Label nút: 1 set → "Kết thúc" (tự kết thúc trận), 3 set → "Kết thúc Set"
+  const endSetLabel = maxSetsB === 1 ? '🏁 Kết thúc' : '⏹ Kết thúc Set';
+
+  const el = document.getElementById('refActionBtns');
+  if (!el) return;
+  el.innerHTML = ''
+    + '<button class="btn-call-shuttle" onclick="refCallHelp(\'shuttle\')">🏸 Thêm cầu</button>'
+    + '<button class="btn-call-chief" onclick="refCallHelp(\'chief\')">📣 Tổng trọng tài</button>'
+    + '<button class="btn-end-set" onclick="refEndSet()" style="grid-column:1/-1">⏹ Kết thúc</button>';
+}
+
 function refEndSet() {
   if (!REF.started) return;
   const winner = REF.s1 > REF.s2 ? 1 : (REF.s2 > REF.s1 ? 2 : 0);
   if (winner === 0) {
-    if (!confirm('Tỉ số đang hòa ' + REF.s1 + '-' + REF.s2 + '. Vẫn kết thúc set?')) return;
+    alert('Tỉ số đang hòa ' + REF.s1 + '-' + REF.s2 + '. Không thể kết thúc set khi đang hòa điểm!');
+    return;
   }
+
+  // Lưu set hiện tại
   REF.sets.push({ s1: REF.s1, s2: REF.s2, winner });
   const setDuration = REF.elapsed - REF.setStartElapsed;
   REF.setTimes.push({ setNo: REF.sets.length, duration: setDuration });
@@ -4364,11 +4755,34 @@ function refEndSet() {
   else if (winner === 2) REF.w2++;
   REF.s1 = 0; REF.s2 = 0;
   REF.serveHistory = [];
+
+  // Lấy cài đặt số set vòng này
+  const asgnR = REF.assignment;
+  const schedItemR = asgnR ? (S.schedule || []).find(function(r) {
+    if (asgnR.match_key === '3rd') return false;
+    if (asgnR.match_key.startsWith('rr::')) return false;
+    return (r.ri + ',' + r.mi) === asgnR.match_key;
+  }) : null;
+  const roundNameR = asgnR && asgnR.match_key === '3rd' ? 'Hạng ba'
+    : (schedItemR ? schedItemR.roundName : (asgnR ? asgnR.match_label : ''));
+  const rsR = getRoundSetting(roundNameR);
+  const minWinR = rsR.minSetsToWin || Math.ceil((rsR.maxSets || 3) / 2);
+
+  const w1now = REF.w1, w2now = REF.w2;
+  const matchDone = w1now >= minWinR || w2now >= minWinR;
+
   updateRefUI();
   pushLiveScore();
   saveRefState();
-  const wName = winner === 1 ? REF.name1a : winner === 2 ? REF.name2a : null;
-  refShowNewSetServeSelect(REF.sets.length, wName, winner);
+
+  if (matchDone) {
+    // Đã đủ set thắng → kết thúc trận luôn, không hỏi giao/nhận
+    refEndMatch();
+  } else {
+    // Còn set tiếp → hỏi giao/nhận cầu
+    const wName = winner === 1 ? REF.name1a : winner === 2 ? REF.name2a : null;
+    refShowNewSetServeSelect(REF.sets.length, wName, winner);
+  }
 }
 
 function refShowNewSetServeSelect(completedSetNo, wName, winner) {
@@ -4411,10 +4825,10 @@ function refShowNewSetServeSelect(completedSetNo, wName, winner) {
   ];
 
   const losePlayers = REF.isDouble ? [
-    { id: losingSide + 'a', name: losingSide === 'side1' ? (REF.name1a || 'Bên trái A') : (REF.name2a || 'Bên phải A'), color: '#3b82f6' },
-    { id: losingSide + 'b', name: losingSide === 'side1' ? (REF.name1b || 'Bên trái B') : (REF.name2b || 'Bên phải B'), color: '#3b82f6' },
+    { id: losingSide + 'a', name: losingSide === 'side1' ? (REF.name1a || 'Bên trái A') : (REF.name2a || 'Bên phải A'), color: '#ef4444' },
+    { id: losingSide + 'b', name: losingSide === 'side1' ? (REF.name1b || 'Bên trái B') : (REF.name2b || 'Bên phải B'), color: '#ef4444' },
   ] : [
-    { id: losingSide + 'a', name: winner === 1 ? (REF.name2a || 'Bên phải') : (REF.name1a || 'Bên trái'), color: '#3b82f6' },
+    { id: losingSide + 'a', name: winner === 1 ? (REF.name2a || 'Bên phải') : (REF.name1a || 'Bên trái'), color: '#ef4444' },
   ];
 
   var selectedServer   = null;
@@ -4482,11 +4896,6 @@ function refShowNewSetServeSelect(completedSetNo, wName, winner) {
   confirmBtn.textContent = 'Xác nhận → Bắt đầu Set ' + (completedSetNo + 1);
 
   // Nút kết thúc trận
-  const endMatchBtn = document.createElement('button');
-  endMatchBtn.style.cssText = 'width:100%;padding:11px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;font-weight:700;font-size:13px;border-radius:10px;cursor:pointer;margin-top:-6px';
-  endMatchBtn.textContent = '🏁 Kết thúc trận (không đánh set tiếp)';
-  endMatchBtn.onclick = function() { overlay.remove(); refEndMatch(); };
-  box.appendChild(endMatchBtn);
 
   confirmBtn.onclick = function() {
     if (!selectedServer || !selectedReceiver) return;
@@ -4504,6 +4913,155 @@ function refShowNewSetServeSelect(completedSetNo, wName, winner) {
   };
   box.appendChild(confirmBtn);
 }
+function openScoreInput(ri, mi) {
+  const existing = document.getElementById('scoreInputOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'scoreInputOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#1a2035;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;color:#f0f4ff';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
+  const existingResult = S.knockoutResults[ri + ',' + mi];
+  const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
+  const schedRef = (S.schedule || []).find(function(r){ return (r.ri+','+r.mi) === ri+','+mi; });
+  // Lấy tên từ nhiều nguồn: node → schedule → result
+  const p1 = (node && node.p1) || (schedRef && schedRef.vdv1) || (existingResult && existingResult.winner) || '?';
+  const p2 = (node && node.p2) || (schedRef && schedRef.vdv2) || '?';
+  const rsRef = getRoundSetting(schedRef ? schedRef.roundName : '');
+  const inputRows = buildSetInputRowsPrefilled('ko', ri+'_'+mi, prefillSets, rsRef.maxSets);
+
+  box.innerHTML = '<div style="font-size:16px;font-weight:700">✏️ ' + (existingResult ? 'Sửa điểm' : 'Nhập điểm thủ công') + '</div>'
+    + '<div style="font-size:13px;color:var(--muted)">' + p1 + ' vs ' + p2 + '</div>'
+    + '<div style="font-size:11px;color:var(--muted)">Để trống set không đấu</div>'
+    + '<div id="scoreInputRows">' + inputRows + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    + '<button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="document.getElementById(\'scoreInputOverlay\').remove()">Hủy</button>'
+    + '<button class="btn" style="width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700" onclick="saveKnockoutResult('+ri+','+mi+');document.getElementById(\'scoreInputOverlay\').remove()">✓ Lưu</button>'
+    + '</div>';
+}
+
+function openRRScoreInput(safeGName, pairIdx) {
+  const existing = document.getElementById('scoreInputOverlay');
+  if (existing) existing.remove();
+
+  // Tìm tên bảng thực từ pairsByGroup
+  const gName = Object.keys(S.pairsByGroup || {}).find(function(k) {
+    return k.replace(/[^a-zA-Z0-9]/g,'_') === safeGName;
+  }) || safeGName.replace(/_/g,' ');
+
+  const pairs = S.pairsByGroup[gName] || [];
+  const pair = pairs[pairIdx] || [];
+  const p1 = pair[0] || '?', p2 = pair[1] || '?';
+  const existingResult = S.rrResults[gName + ':' + pairIdx];
+  const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
+  const rsRR = getRoundSetting(gName);
+  const inputRows = buildSetInputRowsPrefilled('rr', safeGName + '_' + pairIdx, prefillSets, rsRR.maxSets);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'scoreInputOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#1a2035;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;color:#f0f4ff';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const closeOverlay = function() { document.getElementById('scoreInputOverlay').remove(); };
+
+  const titleDiv = document.createElement('div');
+  titleDiv.style.cssText = 'font-size:16px;font-weight:700';
+  titleDiv.textContent = (existingResult ? '✏️ Sửa điểm' : '✏️ Nhập điểm') + ' – ' + gName;
+  box.appendChild(titleDiv);
+
+  const subDiv = document.createElement('div');
+  subDiv.style.cssText = 'font-size:13px;color:#a0aec0';
+  subDiv.textContent = p1 + ' vs ' + p2;
+  box.appendChild(subDiv);
+
+  const hintDiv = document.createElement('div');
+  hintDiv.style.cssText = 'font-size:11px;color:#6b7a9a';
+  hintDiv.textContent = 'Để trống set không đấu';
+  box.appendChild(hintDiv);
+
+  const rowsDiv = document.createElement('div');
+  rowsDiv.id = 'scoreInputRows';
+  rowsDiv.innerHTML = inputRows;
+  box.appendChild(rowsDiv);
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.style.cssText = 'width:auto;padding:8px 16px';
+  cancelBtn.textContent = 'Hủy';
+  cancelBtn.onclick = closeOverlay;
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn';
+  saveBtn.style.cssText = 'width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700';
+  saveBtn.textContent = '✓ Lưu';
+  saveBtn.onclick = function() { saveRRResultFromPopup(safeGName, pairIdx, gName); };
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(saveBtn);
+  box.appendChild(btnRow);
+}
+
+function saveRRResultFromPopup(safeGName, pairIdx, gName) {
+  if (!gName) {
+    gName = Object.keys(S.pairsByGroup || {}).find(function(k) {
+      return k.replace(/[^a-zA-Z0-9]/g,'_') === safeGName;
+    }) || safeGName.replace(/_/g,' ');
+  }
+  const id = safeGName + '_' + pairIdx;
+  const sets = collectSets('rr', id);
+  if (!sets) { alert('Vui lòng nhập ít nhất 1 set hợp lệ.'); return; }
+  const w1 = sets.filter(s => s.s1 > s.s2).length;
+  const w2 = sets.filter(s => s.s2 > s.s1).length;
+  const pairs = S.pairsByGroup[gName] || [];
+  const match = pairs[pairIdx] || [];
+  const winner = w1 > w2 ? match[0] : (w2 > w1 ? match[1] : null);
+  const totS1 = sets.reduce((a,s) => a+s.s1, 0);
+  const totS2 = sets.reduce((a,s) => a+s.s2, 0);
+  S.rrResults[gName + ':' + pairIdx] = { s1: totS1, s2: totS2, w1, w2, sets, winner };
+  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
+  const ol = document.getElementById('scoreInputOverlay'); if (ol) ol.remove();
+  renderContent();
+  showTabRR('matches');
+}
+
+function editRRResult(safeGName, pairIdx) {
+  openRRScoreInput(safeGName, pairIdx);
+}
+
+function openScoreInput3rd(p1, p2) {
+  const existing = document.getElementById('scoreInputOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'scoreInputOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#1a2035;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const existing3rd = S.knockoutResults && S.knockoutResults['3rd'];
+  box.innerHTML = '<div style="font-size:16px;font-weight:700">✏️ ' + (existing3rd ? 'Sửa điểm – Hạng ba' : 'Nhập điểm – Hạng ba') + '</div>'
+    + '<div style="font-size:13px;color:var(--muted)">' + p1 + ' vs ' + p2 + '</div>'
+    + '<div style="font-size:11px;color:var(--muted)">Để trống set không đấu</div>'
+    + '<div id="scoreInputRows">' + buildSetInputRowsPrefilled('ko', '3rd', S.knockoutResults && S.knockoutResults['3rd'] ? S.knockoutResults['3rd'].sets : null) + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+    + '<button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="document.getElementById(\'scoreInputOverlay\').remove()">Hủy</button>'
+    + '<button class="btn" style="width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700" onclick="save3rdResult(\''+p1.replace(/'/g,"\\'") +'\',\''+p2.replace(/'/g,"\\'")+'\');document.getElementById(\'scoreInputOverlay\').remove()">✓ Lưu</button>'
+    + '</div>';
+}
+
 function save3rdResult(p1, p2) {
   const sets = collectSets('ko', '3rd');
   if (!sets) { alert('Vui lòng nhập ít nhất 1 set hợp lệ.'); return; }
@@ -4517,27 +5075,79 @@ function save3rdResult(p1, p2) {
 }
 
 function edit3rdResult() {
-  delete S.knockoutResults['3rd'];
-  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
-  renderContent();
-  showTab('matches');
+  const r3 = S.knockoutResults['3rd'];
+  openScoreInput3rd(r3 ? r3.p1 : 'Thua trận 1', r3 ? r3.p2 : 'Thua trận 2');
 }
 
 async function refEndMatch() {
   if (!REF.started) return;
-  if (REF.s1 > 0 || REF.s2 > 0) {
-    if (!confirm('Vẫn còn điểm set hiện tại (' + REF.s1 + '-' + REF.s2 + '). Kết thúc trận không tính set này?')) {
-      if (!confirm('Hay kết thúc set hiện tại rồi kết thúc trận?')) return;
-      refEndSet();
-    }
-  }
-  clearInterval(REF.timerInterval);
-  const totalW1 = REF.sets.filter(s => s.winner === 1).length;
-  const totalW2 = REF.sets.filter(s => s.winner === 2).length;
-  const winner = totalW1 > totalW2 ? REF.assignment.vdv1 : (totalW2 > totalW1 ? REF.assignment.vdv2 : null);
-  if (!winner && !confirm('Tỉ số set hòa. Vẫn kết thúc trận?')) return;
 
+  // Lấy cài đặt vòng hiện tại
   const asgn = REF.assignment;
+  const schedItem = asgn ? (S.schedule || []).find(function(r) {
+    if (asgn.match_key === '3rd') return false;
+    if (asgn.match_key.startsWith('rr::')) return r.match_key === asgn.match_key;
+    return (r.ri + ',' + r.mi) === asgn.match_key;
+  }) : null;
+  const roundName = asgn && asgn.match_key === '3rd' ? 'Hạng ba'
+    : (schedItem ? schedItem.roundName : (asgn ? asgn.match_label : ''));
+  const rs = getRoundSetting(roundName);
+  const maxSets = rs.maxSets || 3;
+  const minWin  = rs.minSetsToWin || Math.ceil(maxSets / 2);
+
+  const totalW1cur = REF.sets.filter(function(s){ return s.winner === 1; }).length;
+  const totalW2cur = REF.sets.filter(function(s){ return s.winner === 2; }).length;
+
+  // Nếu đang có điểm set dở
+  if (REF.s1 > 0 || REF.s2 > 0) {
+    if (REF.s1 === REF.s2) {
+      alert('Tỉ số set hiện tại đang hòa ' + REF.s1 + '-' + REF.s2 + '. Không thể kết thúc khi đang hòa điểm.');
+      return;
+    }
+    if (!confirm('Còn set đang dở (' + REF.s1 + '-' + REF.s2 + '). Tự động lưu set này rồi kết thúc trận?')) return;
+    const setWinner = REF.s1 > REF.s2 ? 1 : 2;
+    REF.sets.push({ s1: REF.s1, s2: REF.s2, winner: setWinner });
+    if (setWinner === 1) REF.w1++; else REF.w2++;
+    REF.s1 = 0; REF.s2 = 0;
+  }
+
+  clearInterval(REF.timerInterval);
+  const totalW1 = REF.sets.filter(function(s){ return s.winner === 1; }).length;
+  const totalW2 = REF.sets.filter(function(s){ return s.winner === 2; }).length;
+
+  // Kiểm tra đủ điều kiện thắng theo cài đặt vòng
+  const someoneWon = totalW1 >= minWin || totalW2 >= minWin;
+  if (!someoneWon) {
+    const msg = maxSets === 1
+      ? 'Chưa có kết quả set nào. Không thể kết thúc trận.'
+      : 'Chưa đủ set thắng (cần ' + minWin + '/' + maxSets + ' set). '
+        + 'Hiện tại: ' + REF.name1a + ' ' + totalW1 + ' – ' + totalW2 + ' ' + REF.name2a + '.';
+    alert(msg);
+    // Khởi động lại timer
+    REF.timerInterval = setInterval(function() {
+      REF.elapsed++;
+      const m = String(Math.floor(REF.elapsed/60)).padStart(2,'0');
+      const s = String(REF.elapsed%60).padStart(2,'0');
+      const el = document.getElementById('refTimer');
+      if (el) el.textContent = m + ':' + s;
+    }, 1000);
+    return;
+  }
+
+  // Không cho kết thúc khi set hòa
+  if (totalW1 === totalW2) {
+    alert('Tỉ số set đang hòa ' + totalW1 + '-' + totalW2 + '. Cần có kết quả thắng thua rõ ràng.');
+    REF.timerInterval = setInterval(function() {
+      REF.elapsed++;
+      const m = String(Math.floor(REF.elapsed/60)).padStart(2,'0');
+      const s = String(REF.elapsed%60).padStart(2,'0');
+      const el = document.getElementById('refTimer');
+      if (el) el.textContent = m + ':' + s;
+    }, 1000);
+    return;
+  }
+  const winner = totalW1 > totalW2 ? REF.assignment.vdv1 : REF.assignment.vdv2;
+
   const isRR = asgn.match_key.startsWith('rr::');
 
   showLoading('Đang lưu kết quả...');
@@ -4561,8 +5171,18 @@ async function refEndMatch() {
         w1: totalW1, w2: totalW2,
         sets: REF.sets, shuttle: REF.shuttle,
       };
+    } else if (asgn.match_key === '3rd') {
+      // Trận tranh hạng 3
+      Object.assign(S, tdata);
+      S._tournamentId = asgn.tournament_id;
+      S.knockoutResults['3rd'] = {
+        s1: totalW1, s2: totalW2, winner,
+        w1: totalW1, w2: totalW2,
+        sets: REF.sets, shuttle: REF.shuttle,
+        p1: asgn.vdv1, p2: asgn.vdv2,
+      };
     } else {
-      // Knockout
+      // Knockout thường
       const [riStr, miStr] = asgn.match_key.split(',');
       const ri = parseInt(riStr), mi = parseInt(miStr);
       Object.assign(S, tdata);
@@ -5080,10 +5700,6 @@ window.addEventListener('DOMContentLoaded', () => {
 <div class="ref-setup-overlay hidden" id="refSetupOverlay">
   <div class="ref-setup-box">
     <h3>🏸 Nhập tên VĐV</h3>
-    <div class="ref-type-toggle">
-      <div class="ref-type-btn active" id="refTypeSingle" onclick="refSetType('single')">Đơn (2 người)</div>
-      <div class="ref-type-btn" id="refTypeDouble" onclick="refSetType('double')">Đôi (4 người)</div>
-    </div>
     <!-- Team 1 -->
     <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px;text-transform:uppercase">Bên trái</div>
