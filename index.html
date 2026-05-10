@@ -5844,22 +5844,26 @@ function updateLiveScoreBanner(matchKey, sd) {
   const key = matchKey.split(':').slice(1).join(':');
   let safeKey;
   if (key.startsWith('rr::')) {
-    // rr::GroupName::pairIdx → rr_GroupSafe_pairIdx  (đúng với rrSafeKey trong table)
-    const parts = key.split('::'); // ['rr', 'GroupName', 'pairIdx']
+    const parts = key.split('::');
     safeKey = 'rr_' + parts[1].replace(/[^a-zA-Z0-9]/g,'_') + '_' + parts[2];
   } else {
     safeKey = key.replace(',','_');
   }
 
-  // Find the score cell in the KO table row
+  // Không ghi đè nếu trận đã có kết quả cuối (tránh live score cũ override ô điểm)
+  const normalKey = key.startsWith('rr::') ? key : key; // kept for clarity
+  const isFinalDone = !key.startsWith('rr::')
+    ? (S.knockoutResults && S.knockoutResults[key] != null)
+    : false;
+  if (isFinalDone) return;
+
   const scoreCell = document.getElementById('liveScore_' + safeKey);
   const row = document.getElementById('liveRow_' + safeKey);
 
   if (scoreCell) {
-    // Update inline score cell
     renderLiveScoreCell(scoreCell, sd, key);
+    if (row) row.classList.add('live-row');
   } else {
-    // Row not visible yet (tab not open) — store for when table re-renders
     _pendingLiveScores[key] = sd;
   }
 }
@@ -5894,6 +5898,11 @@ const _pendingLiveScores = {};
 
 function applyPendingLiveScores() {
   Object.entries(_pendingLiveScores).forEach(([key, sd]) => {
+    // Bỏ qua nếu trận đã có kết quả cuối
+    if (!key.startsWith('rr::') && S.knockoutResults && S.knockoutResults[key] != null) {
+      delete _pendingLiveScores[key];
+      return;
+    }
     let safeKey;
     if (key.startsWith('rr::')) {
       const parts = key.split('::');
