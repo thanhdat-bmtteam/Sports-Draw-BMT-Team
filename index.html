@@ -3240,9 +3240,10 @@ async function renderKOMatchesTable(container) {
     if (result) {
       scoreTd = scoreCell; // finished - show result normally
     } else if (hasActiveRef) {
-      // Referee is handling this match - show live score cell instead of input
+      // Referee is handling this match - show live score cell but still allow manual override
       scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center;color:var(--muted);font-size:12px">
         <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
+        ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput(${ri},${mi})">✏️</button>` : ''}
       </td>`;
     } else {
       scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">${scoreCell.replace(/^<td[^>]*>/,'').replace(/<\/td>$/,'')}</td>`;
@@ -3298,6 +3299,7 @@ async function renderKOMatchesTable(container) {
     } else if (hasActiveRefF) {
       scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center;color:var(--muted);font-size:12px">
         <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
+        ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput(${ri},${mi})">✏️</button>` : ''}
       </td>`;
     } else if (canEdit) {
       scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center">
@@ -3383,6 +3385,7 @@ async function renderKOMatchesTable(container) {
       } else if (hasActiveRef3) {
         score3 = `<td id="liveScore_3rd" style="text-align:center;color:var(--muted);font-size:12px">
           <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
+          ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput3rd('${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}')">✏️</button>` : ''}
         </td>`;
       } else if (canEdit) {
         score3 = `<td id="liveScore_3rd" style="text-align:center">
@@ -3556,6 +3559,7 @@ async function renderRRMatchesWithScore(container) {
       } else if (hasActiveRef) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted)">
           <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ ĐANG DIỄN RA</span>
+          ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>` : ''}
         </td>`;
       } else if (canEdit) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
