@@ -3246,7 +3246,7 @@ async function renderKOMatchesTable(container) {
         ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput(${ri},${mi})">✏️</button>` : ''}
       </td>`;
     } else {
-      scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">${scoreCell.replace(/^<td[^>]*>/,'').replace(/<\/td>$/,'')}</td>`;
+      scoreTd = scoreCell.replace(/ id="liveScore_[^"]*"/, ` id="liveScore_${safeKey}"`);
     }
     const report = _cachedReports[aKey];
     html += `<tr id="liveRow_${safeKey}">
