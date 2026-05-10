@@ -3193,7 +3193,13 @@ async function renderKOMatchesTable(container) {
       p2Class = result.winner === p2 ? 'winner-name' : 'loser-name';
     }
 
-    let scoreCell = '';
+    const aKey = `${ri},${mi}`;
+    const safeKey = aKey.replace(',','_');
+    const asgn = _cachedAssignments[aKey];
+    const hasActiveRef = asgn && asgn.status !== 'done';
+
+    // ── Ô điểm: luôn cho nhập/sửa khi canEdit, bất kể trạng thái trọng tài ──
+    let scoreTd;
     if (result) {
       const w1 = result.w1 !== undefined ? result.w1 : result.s1;
       const w2 = result.w2 !== undefined ? result.w2 : result.s2;
@@ -3203,23 +3209,25 @@ async function renderKOMatchesTable(container) {
       const mainScore = result.sets && result.sets.length === 1
         ? `${result.sets[0].s1}–${result.sets[0].s2}`
         : `${w1}–${w2} set`;
-      scoreCell = `<td style="text-align:center">
+      scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">
         <span class="score-done">${mainScore}</span>
         ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
         ${canEdit ? `<button class="btn-edit-score" onclick="editKnockoutResult(${ri},${mi})">✏️</button>` : ''}
       </td>`;
-    } else if (canEdit) {
-      scoreCell = `<td id="liveScore_${ri}_${mi}" style="text-align:center">
-        <span style="color:var(--muted);font-size:12px">–</span>
-        <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput(${ri},${mi})">✏️</button>
-      </td>`;
     } else {
-      scoreCell = `<td style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+      // Chưa có kết quả — luôn hiện nút ✏️ cho BTC, kèm badge nếu đang có trọng tài
+      const refBadge = hasActiveRef
+        ? `<span style="display:block;color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px;margin-bottom:2px">⏳ CHỜ TRỌNG TÀI</span>`
+        : '';
+      scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">
+        ${refBadge}
+        ${canEdit
+          ? `<button class="btn-edit-score" title="${hasActiveRef ? 'Nhập tay (ghi đè)' : 'Nhập điểm'}" onclick="openScoreInput(${ri},${mi})">✏️</button>`
+          : `<span style="color:var(--muted);font-size:12px">–</span>`
+        }
+      </td>`;
     }
 
-    const aKey = `${ri},${mi}`;
-    const safeKey = aKey.replace(',','_');
-    const asgn = _cachedAssignments[aKey];
     let refCell = '';
     if (canAssign) {
       if (asgn && asgn.status !== 'done') {
@@ -3233,20 +3241,6 @@ async function renderKOMatchesTable(container) {
       } else {
         refCell = `<td><button class="btn-assign" onclick="openAssignModal(${ri},${mi},${matchNo},'${p1.replace(/'/g,"\'")}','${p2.replace(/'/g,"\'")}')">+ Phân công</button></td>`;
       }
-    }
-    // Score cell: if referee assigned & match not done, hide input - show live placeholder
-    const hasActiveRef = asgn && asgn.status !== 'done';
-    let scoreTd;
-    if (result) {
-      scoreTd = scoreCell; // finished - show result normally
-    } else if (hasActiveRef) {
-      // Referee is handling this match - show live score cell but still allow manual override
-      scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center;color:var(--muted);font-size:12px">
-        <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
-        ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput(${ri},${mi})">✏️</button>` : ''}
-      </td>`;
-    } else {
-      scoreTd = scoreCell.replace(/ id="liveScore_[^"]*"/, ` id="liveScore_${safeKey}"`);
     }
     const report = _cachedReports[aKey];
     html += `<tr id="liveRow_${safeKey}">
