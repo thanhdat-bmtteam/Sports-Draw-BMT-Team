@@ -2520,6 +2520,23 @@ function saveKnockoutResult(ri, mi) {
   rebuildKnockoutTree();
   if (S._tournamentId) {
     saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('saveKnockoutResult:', e));
+    // Tự động tạo biên bản khi nhập tay để nút "Biên bản" hiện ra
+    const matchKey = ri + ',' + mi;
+    const schedI = (S.schedule || []).find(r => (r.ri + ',' + r.mi) === matchKey);
+    const reportData = {
+      tournament_id: S._tournamentId,
+      match_key: matchKey,
+      match_label: schedI ? (schedI.roundName + ' #' + schedI.matchNo) : matchKey,
+      referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || '',
+      name1: np1, name2: np2,
+      sets: sets, set_times: [], point_log: [], shuttle: 0,
+      total_elapsed: 0, start_time: null,
+      end_time: new Date().toISOString(),
+      winner: winner, created_at: new Date().toISOString(),
+    };
+    _cachedReports[matchKey] = reportData;
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
+      .catch(e => console.warn('auto-saveReport KO:', e));
   }
   renderContent();
   if (S.schedule && S.schedule.length) showTab('matches');
@@ -2620,6 +2637,22 @@ function saveRRResult(groupName, idx) {
   // Lưu lên Supabase
   if (S._tournamentId) {
     saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('saveRRResult:', e));
+    // Tự động tạo biên bản khi nhập tay
+    const rrMatchKey = 'rr::' + groupName + '::' + idx;
+    const reportData = {
+      tournament_id: S._tournamentId,
+      match_key: rrMatchKey,
+      match_label: groupName + ' - Trận ' + (idx + 1),
+      referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || '',
+      name1: match[0], name2: match[1],
+      sets: sets, set_times: [], point_log: [], shuttle: 0,
+      total_elapsed: 0, start_time: null,
+      end_time: new Date().toISOString(),
+      winner: winner || '', created_at: new Date().toISOString(),
+    };
+    _cachedReports[rrMatchKey] = reportData;
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
+      .catch(e => console.warn('auto-saveReport RR:', e));
   }
   renderContent();
   showTabRR('matches');
@@ -5242,7 +5275,24 @@ function save3rdResult(p1, p2) {
   const w2 = sets.filter(s => s.s2 > s.s1).length;
   const winner = w1 > w2 ? p1 : (w2 > w1 ? p2 : null);
   S.knockoutResults['3rd'] = { s1: sets.reduce((a,s)=>a+s.s1,0), s2: sets.reduce((a,s)=>a+s.s2,0), w1, w2, sets, winner, p1, p2 };
-  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
+  if (S._tournamentId) {
+    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
+    // Tự động tạo biên bản khi nhập tay – trận Hạng ba
+    const reportData = {
+      tournament_id: S._tournamentId,
+      match_key: '3rd',
+      match_label: 'Trận Hạng ba',
+      referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || '',
+      name1: p1, name2: p2,
+      sets: sets, set_times: [], point_log: [], shuttle: 0,
+      total_elapsed: 0, start_time: null,
+      end_time: new Date().toISOString(),
+      winner: winner || '', created_at: new Date().toISOString(),
+    };
+    _cachedReports['3rd'] = reportData;
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
+      .catch(e => console.warn('auto-saveReport 3rd:', e));
+  }
   renderContent();
   showTab('matches');
 }
@@ -5418,10 +5468,15 @@ async function refEndMatch() {
     getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
       .then(function(r) { if (r.error) console.warn('saveReport:', r.error); });
 
+    // Cập nhật cache ngay lập tức để nút "Biên bản" hiện ra mà không cần F5
+    _cachedReports[asgn.match_key] = reportData;
+
     document.getElementById('refScreen').classList.add('hidden');
     alert('🏆 Trận kết thúc! ' + (winner ? winner + ' thắng ' + totalW1 + '-' + totalW2 + ' set.' : 'Hòa.') + '\n📋 Biên bản đã lưu, quản lý tải về từ danh sách trận.');
     REF.assignment = null;
     showRefWaiting();
+    // Re-render bảng trận để nút Biên bản xuất hiện ngay
+    renderContent();
   } catch(e) {
     hideLoading();
     alert('❌ Lỗi lưu kết quả: ' + e.message);
