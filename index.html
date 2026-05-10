@@ -3198,32 +3198,26 @@ async function renderKOMatchesTable(container) {
     const asgn = _cachedAssignments[aKey];
     const hasActiveRef = asgn && asgn.status !== 'done';
 
-    // ── Ô điểm: luôn cho nhập/sửa khi canEdit, bất kể trạng thái trọng tài ──
-    let scoreTd;
+    // ── Ô điểm: đơn giản — có kết quả thì hiện điểm + ✏️ sửa, chưa có thì hiện ✏️ nhập ──
+    let scoreContent = '';
     if (result) {
       const w1 = result.w1 !== undefined ? result.w1 : result.s1;
       const w2 = result.w2 !== undefined ? result.w2 : result.s2;
-      const setsHtml = (result.sets && result.sets.length > 1)
-        ? result.sets.map((s, i) => `<div class="set-score-line">S${i+1}: ${s.s1}–${s.s2}</div>`).join('')
+      const setsArr = result.sets || [];
+      const setsHtml = setsArr.length > 1
+        ? setsArr.map(function(s,i){ return '<div class="set-score-line">S'+(i+1)+': '+s.s1+'–'+s.s2+'</div>'; }).join('')
         : '';
-      const mainScore = result.sets && result.sets.length === 1
-        ? `${result.sets[0].s1}–${result.sets[0].s2}`
-        : `${w1}–${w2} set`;
-      scoreTd = `<td id="liveScore_${safeKey}" style="text-align:center">
-        <span class="score-done">${mainScore}</span>
-        ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-        ${canEdit ? `<button class="btn-edit-score" onclick="editKnockoutResult(${ri},${mi})">✏️</button>` : ''}
-      </td>`;
+      const mainScore = setsArr.length === 1
+        ? (setsArr[0].s1 + '–' + setsArr[0].s2)
+        : (w1 + '–' + w2 + ' set');
+      scoreContent = '<span class="score-done">' + mainScore + '</span>'
+        + (setsHtml ? '<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">' + setsHtml + '</div>' : '')
+        + (canEdit ? '<button class="btn-edit-score" onclick="openScoreInput(' + ri + ',' + mi + ')">✏️</button>' : '');
     } else {
-      // Chưa có kết quả — luôn hiện nút ✏️ cho BTC, kèm badge nếu đang có trọng tài
-      const refBadge = hasActiveRef
-        ? '<span style="display:block;color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px;margin-bottom:2px">⏳ CHỜ TRỌNG TÀI</span>'
-        : '';
-      const scoreBtn = canEdit
-        ? '<button class="btn-edit-score" title="' + (hasActiveRef ? 'Nhập tay (ghi đè)' : 'Nhập điểm') + '" onclick="openScoreInput(' + ri + ',' + mi + ')">✏️</button>'
-        : '<span style="color:var(--muted);font-size:12px">–</span>';
-      scoreTd = '<td id="liveScore_' + safeKey + '" style="text-align:center">' + refBadge + scoreBtn + '</td>';
+      const badge = hasActiveRef ? '<span style="display:block;color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px;margin-bottom:2px">⏳ CHỜ TRỌNG TÀI</span>' : '';
+      scoreContent = badge + (canEdit ? '<button class="btn-edit-score" onclick="openScoreInput(' + ri + ',' + mi + ')">✏️</button>' : '<span style="color:var(--muted);font-size:12px">–</span>');
     }
+    const scoreTd = '<td id="liveScore_' + safeKey + '" style="text-align:center;vertical-align:middle">' + scoreContent + '</td>';
 
     let refCell = '';
     if (canAssign) {
@@ -3249,7 +3243,7 @@ async function renderKOMatchesTable(container) {
       ${scoreTd}
       <td class="${p2Class}">${p2}</td>
       ${refCell}
-      ${canEdit ? `<td>${report ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${aKey}')">📄 Biên bản</button>` : ''}</td>` : ''}
+      ${canEdit ? '<td>' + (report ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKey + '\')">📄 Biên bản</button>' : '') + '</td>' : ''}
     </tr>`;
   }
 
@@ -3273,33 +3267,23 @@ async function renderKOMatchesTable(container) {
     const safeKeyF = aKeyF.replace(',','_');
     const asgnF = _cachedAssignments[aKeyF];
 
-    let scoreFinal = '';
     const hasActiveRefF = asgnF && asgnF.status !== 'done';
+    let scoreFinalContent = '';
     if (fResult) {
       const w1f = fResult.w1 !== undefined ? fResult.w1 : fResult.s1;
       const w2f = fResult.w2 !== undefined ? fResult.w2 : fResult.s2;
-      const setsHtmlF = (fResult.sets && fResult.sets.length > 1)
-        ? fResult.sets.map((s,i) => `<div class="set-score-line">S${i+1}: ${s.s1}–${s.s2}</div>`).join('') : '';
-      const mainF = fResult.sets && fResult.sets.length === 1
-        ? `${fResult.sets[0].s1}–${fResult.sets[0].s2}` : `${w1f}–${w2f} set`;
-      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center">
-        <span class="score-done">${mainF}</span>
-        ${setsHtmlF ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtmlF}</div>` : ''}
-        ${canEdit ? `<button class="btn-edit-score" onclick="editKnockoutResult(${ri},${mi})">✏️</button>` : ''}
-      </td>`;
-    } else if (hasActiveRefF) {
-      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center;color:var(--muted);font-size:12px">
-        <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
-        ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput(${ri},${mi})">✏️</button>` : ''}
-      </td>`;
-    } else if (canEdit) {
-      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center">
-        <span style="color:var(--muted);font-size:12px">–</span>
-        <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput(${ri},${mi})">✏️</button>
-      </td>`;
+      const setsArrF = fResult.sets || [];
+      const setsHtmlF = setsArrF.length > 1
+        ? setsArrF.map(function(s,i){ return '<div class="set-score-line">S'+(i+1)+': '+s.s1+'–'+s.s2+'</div>'; }).join('') : '';
+      const mainF = setsArrF.length === 1 ? (setsArrF[0].s1+'–'+setsArrF[0].s2) : (w1f+'–'+w2f+' set');
+      scoreFinalContent = '<span class="score-done">'+mainF+'</span>'
+        + (setsHtmlF ? '<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">'+setsHtmlF+'</div>' : '')
+        + (canEdit ? '<button class="btn-edit-score" onclick="openScoreInput('+ri+','+mi+')">✏️</button>' : '');
     } else {
-      scoreFinal = `<td id="liveScore_${safeKeyF}" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+      const badgeF = hasActiveRefF ? '<span style="display:block;color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px;margin-bottom:2px">⏳ CHỜ TRỌNG TÀI</span>' : '';
+      scoreFinalContent = badgeF + (canEdit ? '<button class="btn-edit-score" onclick="openScoreInput('+ri+','+mi+')">✏️</button>' : '<span style="color:var(--muted);font-size:12px">–</span>');
     }
+    const scoreFinal = '<td id="liveScore_'+safeKeyF+'" style="text-align:center;vertical-align:middle">'+scoreFinalContent+'</td>';
 
     let refCellF = '';
     if (canAssign) {
@@ -3329,7 +3313,7 @@ async function renderKOMatchesTable(container) {
       ${scoreFinal}
       <td class="${fp2Class}">${fp2}</td>
       ${refCellF}
-      ${canEdit ? `<td>${_cachedReports[aKeyF] ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${aKeyF}')">📄 Biên bản</button>` : ''}</td>` : ''}
+      ${canEdit ? '<td>' + (_cachedReports[aKeyF] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKeyF + '\')">📄 Biên bản</button>' : '') + '</td>' : ''}
     </tr></tbody></table>`;
   }
 
@@ -3361,30 +3345,25 @@ async function renderKOMatchesTable(container) {
       const hasActiveRef3 = asgn3rd && asgn3rd.status !== 'done';
 
       let score3 = '';
+      // Dùng data attribute để tránh lỗi escape tên VĐV trong onclick
+      const btn3 = canEdit
+        ? '<button class="btn-edit-score" data-p1="' + p1_3rd.replace(/"/g,'&quot;') + '" data-p2="' + p2_3rd.replace(/"/g,'&quot;') + '" onclick="openScoreInput3rd(this.dataset.p1,this.dataset.p2)">✏️</button>'
+        : '';
       if (result3) {
-        const w1 = result3.w1 !== undefined ? result3.w1 : 0;
-        const w2 = result3.w2 !== undefined ? result3.w2 : 0;
-        const setsHtml = (result3.sets && result3.sets.length > 1)
-          ? result3.sets.map((s, i) => `<div class="set-score-line">S${i+1}: ${s.s1}–${s.s2}</div>`).join('') : '';
-        const main = result3.sets && result3.sets.length === 1
-          ? `${result3.sets[0].s1}–${result3.sets[0].s2}` : `${w1}–${w2} set`;
-        score3 = `<td id="liveScore_3rd" style="text-align:center">
-          <span class="score-done">${main}</span>
-          ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-          ${canEdit ? `<button class="btn-edit-score" onclick="edit3rdResult()">&#9999;&#65039;</button>` : ''}
-        </td>`;
-      } else if (hasActiveRef3) {
-        score3 = `<td id="liveScore_3rd" style="text-align:center;color:var(--muted);font-size:12px">
-          <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ CHỜ TRỌNG TÀI</span>
-          ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openScoreInput3rd('${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}')">✏️</button>` : ''}
-        </td>`;
-      } else if (canEdit) {
-        score3 = `<td id="liveScore_3rd" style="text-align:center">
-          <span style="color:var(--muted);font-size:12px">–</span>
-          <button class="btn-edit-score" style="margin-left:6px" onclick="openScoreInput3rd('${p1_3rd.replace(/'/g,"\\'")}','${p2_3rd.replace(/'/g,"\\'")}')">✏️</button>
-        </td>`;
+        const w1_3 = result3.w1 !== undefined ? result3.w1 : 0;
+        const w2_3 = result3.w2 !== undefined ? result3.w2 : 0;
+        const sets3 = result3.sets || [];
+        const setsHtml3 = sets3.length > 1
+          ? sets3.map(function(s,i){ return '<div class="set-score-line">S'+(i+1)+': '+s.s1+'–'+s.s2+'</div>'; }).join('') : '';
+        const main3 = sets3.length === 1 ? (sets3[0].s1+'–'+sets3[0].s2) : (w1_3+'–'+w2_3+' set');
+        score3 = '<td id="liveScore_3rd" style="text-align:center;vertical-align:middle">'
+          + '<span class="score-done">'+main3+'</span>'
+          + (setsHtml3 ? '<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">'+setsHtml3+'</div>' : '')
+          + btn3 + '</td>';
       } else {
-        score3 = `<td id="liveScore_3rd" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
+        const badge3 = hasActiveRef3 ? '<span style="display:block;color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px;margin-bottom:2px">⏳ CHỜ TRỌNG TÀI</span>' : '';
+        score3 = '<td id="liveScore_3rd" style="text-align:center;vertical-align:middle">'
+          + badge3 + (btn3 || '<span style="color:var(--muted);font-size:12px">–</span>') + '</td>';
       }
 
       let refCell3 = '';
@@ -3416,7 +3395,7 @@ async function renderKOMatchesTable(container) {
         ${score3}
         <td class="${p2Class3}">${p2_3rd}</td>
         ${refCell3}
-        ${canEdit ? `<td>${_cachedReports['3rd'] ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('3rd')">📄 Biên bản</button>` : ''}</td>` : ''}
+        ${canEdit ? '<td>' + (_cachedReports['3rd'] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'3rd\')">📄 Biên bản</button>' : '') + '</td>' : ''}
       </tr></tbody></table>`;
     }
   }
