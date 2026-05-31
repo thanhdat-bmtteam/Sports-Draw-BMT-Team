@@ -181,10 +181,14 @@
   }
   #bracketCanvas { display: block; }
 
-  .groups-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .groups-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
   .group-card {
     background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px 14px; min-width: 150px;
+    border-radius: var(--radius); padding: 12px 14px;
   }
   .group-card h3 {
     font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px;
@@ -943,8 +947,8 @@
     .score-inp-sm { width: 34px; padding: 2px 4px; }
     .btn-save-score { font-size: 11px; padding: 5px 8px; }
 
-    .groups-grid { gap: 8px; }
-    .group-card { min-width: 130px; padding: 10px 12px; }
+    .groups-grid { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    .group-card { padding: 10px 12px; }
     .group-card .player { font-size: 12px; }
 
     .modal {
@@ -3058,14 +3062,30 @@ async function confirmPhase2() {
   S.schedule = [];
   S.scheduleType = null;
 
-  // Build slots từ pairs (mỗi pair là 1 trận vòng 1)
-  // Flatten pairs thành slots: [p1_match1, p2_match1, p1_match2, p2_match2, ...]
-  const slots = [];
-  pairs.forEach(p => { slots.push(p[0]); slots.push(p[1]); });
-  // Pad lên lũy thừa 2 nếu cần
+  // Build slots từ pairs
+  // Tính bracket size = lũy thừa 2 >= số VĐV thực
+  const numReal = pairs.length * 2;
   let bracketSize = 1;
-  while (bracketSize < slots.length) bracketSize <<= 1;
-  while (slots.length < bracketSize) slots.push('BYE');
+  while (bracketSize < numReal) bracketSize <<= 1;
+
+  // Phân bổ VĐV vào slots, xen kẽ BYE để tránh khoảng trắng lớn
+  // Giống chuẩn bracket: nếu 10 VĐV → bracket 16, 6 BYE
+  // BYE được đặt ở các ô đối diện với VĐV để tạo auto-advance đẹp
+  const slots = new Array(bracketSize).fill('BYE');
+  // Điền VĐV từ pairs vào các ô không-BYE
+  // Với N pairs và bracketSize = 2^k:
+  // Nếu N = bracketSize/2 → đủ, điền tuần tự
+  // Nếu N < bracketSize/2 → có BYE, phân bổ đều: nhóm đầu đủ, nhóm sau để BYE
+  let slot = 0;
+  for (let i = 0; i < pairs.length; i++) {
+    // Mỗi pair chiếm 2 slot liên tiếp
+    const pos = i * 2;
+    if (pos < bracketSize) {
+      slots[pos] = pairs[i][0];
+      slots[pos + 1] = pairs[i][1];
+    }
+  }
+  // Các slot còn lại đã là 'BYE' từ khởi tạo
 
   S.knockoutSlots = slots;
   S.mode = 'knockout';
