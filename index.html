@@ -2711,15 +2711,6 @@ function saveRRResult(groupName, idx) {
   showTabRR('matches');
 }
 
-function editRRResult(groupName, idx) {
-  delete S.rrResults[`${groupName}:${idx}`];
-  if (S._tournamentId) {
-    saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error('editRRResult:', e));
-  }
-  renderContent();
-  showTabRR('matches');
-}
-
 /* Tính bảng xếp hạng vòng tròn */
 function calcRRStandings(groupName, players) {
   const stats = {};
@@ -3482,7 +3473,8 @@ async function renderKOMatchesTable(container) {
 /* ── RR VIEW ── */
 function renderRRView(container) {
   if (!S.groups || !S.groups.length) return;
-  const hasMatches = S.showRRSchedule && Object.keys(S.pairsByGroup).length > 0;
+  // hasMatches: luôn true nếu đã chia bảng (pairsByGroup có data), không cần tạo lịch
+  const hasMatches = Object.keys(S.pairsByGroup).length > 0;
   const hasResults = Object.keys(S.rrResults).length > 0;
 
   const tabs = document.createElement('div');
@@ -3505,7 +3497,7 @@ function renderRRView(container) {
   gDiv.appendChild(grid);
   container.appendChild(gDiv);
 
-  // Matches panel
+  // Matches panel - luôn render nếu đã có bảng
   if (hasMatches) {
     const mDiv = document.createElement('div'); mDiv.id = 'tabMatchesRRContent'; mDiv.style.display = 'none';
     renderRRMatchesWithScore(mDiv);
@@ -3558,8 +3550,8 @@ async function renderRRMatchesWithScore(container) {
       <th>#</th>`;
     if (matches[0]?.san) html += `<th>Sân</th><th>Giờ</th>`;
     html += `<th>VĐV 1</th><th style="text-align:center">Tỉ số</th><th>VĐV 2</th>
+      ${canEdit ? '<th style="text-align:center">Trọng tài</th>' : ''}
       ${canEdit ? '<th style="text-align:center">Thao tác</th>' : ''}
-      ${canEdit ? '<th></th>' : ''}
     </tr></thead><tbody>`;
 
     matches.forEach((r, rowIdx) => {
@@ -3642,7 +3634,10 @@ async function renderRRMatchesWithScore(container) {
         ${scoreTd}
         <td class="${p2Class}">${p2}</td>
         ${assignCell}
-        ${canEdit ? `<td>${rrReport ? `<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport('${rrMatchKey}')">📄 Biên bản</button>` : ''}</td>` : ''}
+        ${canEdit ? `<td class="action-cell">
+          ${rrReport ? `<button class="btn-save-score" onclick="downloadMatchReport('${rrMatchKey}')">📄 Biên bản</button>` : ''}
+          ${(rrAssignment || result) ? `<button class="btn-reset" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetRRMatch('${rrMatchKey}','${gName.replace(/'/g,"\\'")}',${pairIdx})">🗑️ Đặt lại</button>` : ''}
+        </td>` : ''}
       </tr>`;
     });
 
@@ -4167,6 +4162,50 @@ async function cancelAssignment(id) {
     alert('❌ Lỗi xóa: ' + e.message);
   }
 }
+async function resetRRMatch(rrMatchKey, gName, pairIdx) {
+  if (!can('result')) { alert('⛔ Bạn không có quyền thực hiện thao tác này.'); return; }
+  if (!S._tournamentId) return;
+
+  const asgn = _cachedAssignments[rrMatchKey];
+  const rrKey = gName + ':' + pairIdx;
+  const hasResult = !!(S.rrResults && S.rrResults[rrKey]);
+  const hasReport = !!_cachedReports[rrMatchKey];
+
+  const lines = [];
+  if (asgn) lines.push('• Xóa phân công trọng tài (' + (asgn.referee || '') + ')');
+  if (hasResult) lines.push('• Xóa kết quả / tỉ số trận');
+  if (hasReport) lines.push('• Xóa biên bản trận');
+  lines.push('• Xóa live score (nếu có)');
+
+  if (!asgn && !hasResult && !hasReport) { alert('Trận này chưa có dữ liệu gì để xóa.'); return; }
+  if (!confirm('⚠️ Đặt lại trận ' + gName + ' #' + (pairIdx + 1) + '?\n\nSẽ xóa:\n' + lines.join('\n') + '\n\nHành động này không thể hoàn tác!')) return;
+
+  showLoading('Đang đặt lại trận...');
+  try {
+    if (asgn) {
+      await deleteAssignment(asgn.id);
+      delete _cachedAssignments[rrMatchKey];
+    }
+    const liveKey = S._tournamentId + ':' + rrMatchKey;
+    await deleteLiveScore(liveKey);
+    if (hasReport) {
+      await getDB().from('bmt_match_reports').delete().eq('match_key', rrMatchKey).eq('tournament_id', S._tournamentId);
+      delete _cachedReports[rrMatchKey];
+    }
+    if (hasResult) {
+      delete S.rrResults[rrKey];
+      await saveTournamentData(S._tournamentId, buildSnapshot());
+    }
+    hideLoading();
+    renderContent();
+    showTabRR('matches');
+    alert('✅ Đã đặt lại trận. Có thể phân công lại hoặc nhập điểm thủ công.');
+  } catch(e) {
+    hideLoading();
+    alert('❌ Lỗi: ' + e.message);
+  }
+}
+
 async function resetMatch(ri, mi) {
   if (!can('result')) { alert('⛔ Bạn không có quyền thực hiện thao tác này.'); return; }
   if (!S._tournamentId) return;
@@ -5441,6 +5480,7 @@ async function saveRRResultFromPopup(inputId, pairIdx, gName) {
   if (!sets) { alert('Vui lòng nhập ít nhất 1 set hợp lệ.'); return; }
   const w1 = sets.filter(s => s.s1 > s.s2).length;
   const w2 = sets.filter(s => s.s2 > s.s1).length;
+  if (w1 === w2) { alert('Không thể hòa set – phải có thắng thua rõ ràng.'); return; }
   const pairs = S.pairsByGroup[gName] || [];
   const match = pairs[pairIdx] || [];
   const winner = w1 > w2 ? match[0] : (w2 > w1 ? match[1] : null);
