@@ -3056,7 +3056,7 @@ function renderKnockoutView(container) {
 
   tabs.innerHTML = `
     <button class="tab active" id="tabBracket" onclick="showTab('bracket')">🏆 Sơ đồ bracket</button>
-    ${hasSchedule ? `<button class="tab" id="tabMatches" onclick="showTab('matches')">📋 Danh sách trận</button>` : ''}
+    <button class="tab" id="tabMatches" onclick="showTab('matches')">📋 Danh sách trận</button>
     <button class="tab" id="tabRanking" onclick="showTab('ranking')">🥇 Xếp hạng</button>
     <div id="shuttleCounter" style="
       margin-left:auto; display:flex; align-items:center; gap:7px;
@@ -3092,11 +3092,9 @@ function renderKnockoutView(container) {
   bOuter.appendChild(bWrap);
   container.appendChild(bOuter);
 
-  if (hasSchedule) {
-    const mDiv = document.createElement('div'); mDiv.id = 'tabMatchesContent'; mDiv.style.display = 'none';
-    renderKOMatchesTable(mDiv); // async, self-rendering
-    container.appendChild(mDiv);
-  }
+  const mDiv = document.createElement('div'); mDiv.id = 'tabMatchesContent'; mDiv.style.display = 'none';
+  renderKOMatchesTable(mDiv); // async, self-rendering
+  container.appendChild(mDiv);
 
   // Tab xếp hạng
   const rDiv = document.createElement('div'); rDiv.id = 'tabRankingContent'; rDiv.style.display = 'none';
@@ -3209,7 +3207,20 @@ async function renderKOMatchesTable(container) {
   await loadAssignmentsForTable();
   const sec = document.createElement('div'); sec.className = 'schedule-section';
 
-  const hasTime = S.schedule.some(r => r.time);
+  // Nếu chưa có lịch → build danh sách trận từ knockoutRounds trực tiếp
+  const scheduleToRender = (S.schedule && S.schedule.length)
+    ? S.schedule
+    : (S.knockoutRounds || []).flatMap((round, ri) =>
+        round.map((node, mi) => ({
+          ri, mi,
+          matchNo: node.matchNo || (ri * 100 + mi + 1),
+          san: '–', time: null,
+          roundName: getKORoundNameByIndex(ri, S.knockoutRounds.length),
+          vdv1: node.p1 || '', vdv2: node.p2 || ''
+        })).filter(r => r.vdv1 || r.vdv2)
+      );
+
+  const hasTime = scheduleToRender.some(r => r.time);
   let html = `<h3>📋 Danh sách trận – Loại trực tiếp</h3>
   <table><thead><tr>
     <th>Trận</th><th>Sân</th>${hasTime ? '<th>Giờ</th>' : ''}<th>Vòng</th>
@@ -3218,7 +3229,7 @@ async function renderKOMatchesTable(container) {
     ${canEdit ? '<th style="text-align:center">Thao tác</th>' : ''}
   </tr></thead><tbody>`;
 
-  for (const r of S.schedule) {
+  for (const r of scheduleToRender) {
     if (r.roundName === 'Chung kết') continue; // render riêng bên dưới
     const { ri, mi, matchNo, san, roundName } = r;
     const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
