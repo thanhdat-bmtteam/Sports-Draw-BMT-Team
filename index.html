@@ -3565,6 +3565,8 @@ async function renderRRMatchesWithScore(container) {
       }
 
       const safeGName = gName.replace(/'/g,"\\'");
+      // DEBUG: log gName and pairIdx being set on buttons
+      if (typeof console !== 'undefined') console.log('[RR render] gName:', JSON.stringify(gName), 'pairIdx:', pairIdx);
       // match_key: rr::GroupName::pairIdx — dùng :: để parse chính xác
       const rrMatchKey = 'rr::' + gName + '::' + pairIdx;
       const rrSafeKey  = 'rr_' + gName.replace(/[^a-zA-Z0-9]/g,'_') + '_' + pairIdx;
@@ -5351,12 +5353,13 @@ function downloadMatchReport(matchKey) {
 }
 
 function openRRScoreInput(rawGName, pairIdx) {
+  console.log('[openRRScoreInput] called:', rawGName, pairIdx);
+  console.log('[openRRScoreInput] pairsByGroup keys:', Object.keys(S.pairsByGroup || {}));
+  console.log('[openRRScoreInput] can result:', can('result'), 'role:', AUTH.currentUser?.role);
   try {
   const existing = document.getElementById('scoreInputOverlay');
   if (existing) existing.remove();
 
-  // rawGName là tên bảng thực (có thể có dấu cách, tiếng Việt)
-  // Tìm key chính xác trong pairsByGroup bằng cách so sánh trực tiếp trước
   const safeGName = rawGName;
   const gName = S.pairsByGroup && S.pairsByGroup[rawGName]
     ? rawGName
@@ -5364,9 +5367,12 @@ function openRRScoreInput(rawGName, pairIdx) {
         return k === rawGName || k.replace(/[^a-zA-Z0-9]/g,'_') === rawGName || rawGName.replace(/[^a-zA-Z0-9]/g,'_') === k.replace(/[^a-zA-Z0-9]/g,'_');
       }) || rawGName);
 
+  console.log('[openRRScoreInput] resolved gName:', gName);
   const pairs = S.pairsByGroup[gName] || [];
+  console.log('[openRRScoreInput] pairs count:', pairs.length, 'pairIdx:', pairIdx);
   const pair = pairs[pairIdx] || [];
   const p1 = pair[0] || '?', p2 = pair[1] || '?';
+  console.log('[openRRScoreInput] p1:', p1, 'p2:', p2);
   const existingResult = S.rrResults[gName + ':' + pairIdx];
   const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
   const rsRR = getRoundSetting(gName);
