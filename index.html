@@ -3584,17 +3584,17 @@ async function renderRRMatchesWithScore(container) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
           <span class="score-done">${mainScore}</span>
           ${setsHtml ? `<div class="sets-display" style="margin-top:3px;font-size:11px;color:var(--muted)">${setsHtml}</div>` : ''}
-          ${canEdit ? `<button class="btn-edit-score" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>` : ''}
+          ${canEdit ? `<button class="btn-edit-score" data-gname="${gName}" data-pidx="${pairIdx}" onclick="openRRScoreInput(this.dataset.gname,parseInt(this.dataset.pidx))">✏️</button>` : ''}
         </td>`;
       } else if (hasActiveRef) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted)">
           <span style="color:#f97316;font-size:10px;font-weight:700;letter-spacing:.5px">⏳ ĐANG DIỄN RA</span>
-          ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>` : ''}
+          ${canEdit ? `<button class="btn-edit-score" style="margin-left:6px;opacity:.7" title="Nhập tay (ghi đè)" data-gname="${gName}" data-pidx="${pairIdx}" onclick="openRRScoreInput(this.dataset.gname,parseInt(this.dataset.pidx))">✏️</button>` : ''}
         </td>`;
       } else if (canEdit) {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center">
           <span style="color:var(--muted);font-size:12px">–</span>
-          <button class="btn-edit-score" style="margin-left:6px" onclick="openRRScoreInput('${safeGName}',${pairIdx})">✏️</button>
+          <button class="btn-edit-score" style="margin-left:6px" data-gname="${gName}" data-pidx="${pairIdx}" onclick="openRRScoreInput(this.dataset.gname,parseInt(this.dataset.pidx))">✏️</button>
         </td>`;
       } else {
         scoreTd = `<td id="liveScore_${rrSafeKey}" style="text-align:center;color:var(--muted);font-size:12px">–</td>`;
@@ -5348,14 +5348,19 @@ function downloadMatchReport(matchKey) {
   }, true);
 }
 
-function openRRScoreInput(safeGName, pairIdx) {
+function openRRScoreInput(rawGName, pairIdx) {
+  try {
   const existing = document.getElementById('scoreInputOverlay');
   if (existing) existing.remove();
 
-  // Tìm tên bảng thực từ pairsByGroup
-  const gName = Object.keys(S.pairsByGroup || {}).find(function(k) {
-    return k.replace(/[^a-zA-Z0-9]/g,'_') === safeGName;
-  }) || safeGName.replace(/_/g,' ');
+  // rawGName là tên bảng thực (có thể có dấu cách, tiếng Việt)
+  // Tìm key chính xác trong pairsByGroup bằng cách so sánh trực tiếp trước
+  const safeGName = rawGName;
+  const gName = S.pairsByGroup && S.pairsByGroup[rawGName]
+    ? rawGName
+    : (Object.keys(S.pairsByGroup || {}).find(function(k) {
+        return k === rawGName || k.replace(/[^a-zA-Z0-9]/g,'_') === rawGName || rawGName.replace(/[^a-zA-Z0-9]/g,'_') === k.replace(/[^a-zA-Z0-9]/g,'_');
+      }) || rawGName);
 
   const pairs = S.pairsByGroup[gName] || [];
   const pair = pairs[pairIdx] || [];
@@ -5367,14 +5372,14 @@ function openRRScoreInput(safeGName, pairIdx) {
 
   const overlay = document.createElement('div');
   overlay.id = 'scoreInputOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
 
   const box = document.createElement('div');
   box.style.cssText = 'background:#1a2035;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;color:#f0f4ff';
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
-  const closeOverlay = function() { document.getElementById('scoreInputOverlay').remove(); };
+  const closeOverlay = function() { var el = document.getElementById('scoreInputOverlay'); if (el) el.remove(); };
 
   const titleDiv = document.createElement('div');
   titleDiv.style.cssText = 'font-size:16px;font-weight:700';
@@ -5411,6 +5416,7 @@ function openRRScoreInput(safeGName, pairIdx) {
   btnRow.appendChild(cancelBtn);
   btnRow.appendChild(saveBtn);
   box.appendChild(btnRow);
+  } catch(e) { console.error('openRRScoreInput error:', e); alert('❌ Lỗi mở hộp nhập điểm: ' + e.message); }
 }
 
 function saveRRResultFromPopup(safeGName, pairIdx, gName) {
