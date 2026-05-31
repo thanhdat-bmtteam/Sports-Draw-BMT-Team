@@ -3202,9 +3202,10 @@ function renderKORanking(container) {
 
 /* ── KO Matches table with score input ── */
 async function renderKOMatchesTable(container) {
+  await loadAssignmentsForTable();
+  // canEdit/canAssign tính SAU await để đảm bảo AUTH.currentUser đã sẵn sàng
   const canEdit = can('result');
   const canAssign = can('assign');
-  await loadAssignmentsForTable();
   const sec = document.createElement('div'); sec.className = 'schedule-section';
 
   // Nếu chưa có lịch → build danh sách trận từ knockoutRounds trực tiếp
@@ -3517,8 +3518,9 @@ function showTabRR(tab) {
 
 /* ── RR Matches with score input ── */
 async function renderRRMatchesWithScore(container) {
-  const canEdit = can('result');
   await loadAssignmentsForTable();
+  // canEdit tính SAU await để đảm bảo AUTH.currentUser đã sẵn sàng
+  const canEdit = can('result');
 
   // Group by group name
   const byGroup = {};
