@@ -244,6 +244,17 @@
   }
   .btn-save-score:hover { background: rgba(59,130,246,.3); }
 
+  .action-cell { white-space: nowrap; text-align: center; vertical-align: middle; }
+  .action-cell .btn-save-score,
+  .action-cell .btn-reset { display: inline-block; margin: 2px 2px; }
+  .btn-reset {
+    padding: 4px 10px; background: rgba(239,68,68,.12); color: #ef4444;
+    border: 1px solid rgba(239,68,68,.3); border-radius: 4px; font-size: 11px;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .btn-reset:hover { background: rgba(239,68,68,.25); }
+
   /* Winner highlight */
   .winner-name {
     color: var(--green) !important;
@@ -3297,9 +3308,9 @@ async function renderKOMatchesTable(container) {
       ${scoreTd}
       <td class="${p2Class}">${p2}</td>
       ${refCell}
-      ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+      ${canEdit ? '<td class="action-cell">'
         + (report ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKey + '\')">📄 Biên bản</button>' : '')
-        + ((asgn || result) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
+        + ((asgn || result) ? '<button class="btn-reset" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
         + '</td>' : ''}
     </tr>`;
   }
@@ -3370,9 +3381,9 @@ async function renderKOMatchesTable(container) {
       ${scoreFinal}
       <td class="${fp2Class}">${fp2}</td>
       ${refCellF}
-      ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+      ${canEdit ? '<td class="action-cell">'
         + (_cachedReports[aKeyF] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKeyF + '\')">📄 Biên bản</button>' : '')
-        + ((_cachedAssignments[aKeyF] || fResult) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
+        + ((_cachedAssignments[aKeyF] || fResult) ? '<button class="btn-reset" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
         + '</td>' : ''}
     </tr></tbody></table>`;
   }
@@ -3455,9 +3466,9 @@ async function renderKOMatchesTable(container) {
         ${score3}
         <td class="${p2Class3}">${p2_3rd}</td>
         ${refCell3}
-        ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+        ${canEdit ? '<td class="action-cell">'
           + (_cachedReports['3rd'] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'3rd\')">📄 Biên bản</button>' : '')
-          + ((asgn3rd || result3) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch3rd()">🗑️ Đặt lại</button>' : '')
+          + ((asgn3rd || result3) ? '<button class="btn-reset" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch3rd()">🗑️ Đặt lại</button>' : '')
           + '</td>' : ''}
       </tr></tbody></table>`;
     }
