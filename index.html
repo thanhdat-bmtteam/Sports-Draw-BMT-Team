@@ -1186,6 +1186,7 @@
       <div style="display:flex;flex-direction:column;gap:7px">
         <button class="btn btn-secondary" onclick="showScheduleConfig('roundrobin')">📅 Xếp lịch thi đấu</button>
         <button class="btn btn-secondary" onclick="openRoundSettings()">⚙️ Cài đặt số set theo vòng</button>
+        <button class="btn" style="background:linear-gradient(135deg,#e8a020,#f97316);color:#000;font-weight:700;margin-top:4px" onclick="openPhase2Modal()">⚡ Chuyển sang Knockout</button>
       </div>
     </div>
     <hr class="divider"/>
@@ -2157,6 +2158,9 @@ const S = {
   _scheduleTarget: null,
   showRRSchedule: false,
   roundSettings: {}, // key: roundName → {maxSets: 1|3, minSetsToWin: 1|2}
+  // Phase 2: RR → KO
+  phase: 1,           // 1 = vòng bảng, 2 = knockout
+  phase1RRData: null, // snapshot RR khi chuyển sang KO
 };
 
 function buildSnapshot() {
@@ -2172,6 +2176,8 @@ function buildSnapshot() {
     show3rdPlace: S.show3rdPlace || false,
     matchType: S.matchType || 'single',
     roundSettings: S.roundSettings || {},
+    phase: S.phase || 1,
+    phase1RRData: S.phase1RRData || null,
   };
 }
 
@@ -2748,6 +2754,396 @@ function calcRRStandings(groupName, players) {
 }
 
 /* ════════════════════════════════════════
+   PHASE 2: VÒNG BẢNG → KNOCKOUT
+════════════════════════════════════════ */
+
+function openPhase2Modal() {
+  if (!can('result')) { alert('⛔ Bạn không có quyền thực hiện.'); return; }
+  if (!S.groups || !S.groups.length) { alert('Chưa có dữ liệu vòng bảng.'); return; }
+
+  const existing = document.getElementById('phase2Modal');
+  if (existing) existing.remove();
+
+  // Tính xếp hạng từng bảng
+  const standings = {};
+  S.groups.forEach((players, gi) => {
+    const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+    standings[gName] = calcRRStandings(gName, players);
+  });
+  const numGroups = S.groups.length;
+  const maxPerGroup = S.groups.reduce((mx, g) => Math.max(mx, g.length), 0);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'phase2Modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:16px;color:var(--text);max-height:90vh;overflow-y:auto';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Preview xếp hạng từng bảng
+  let previewHtml = '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Xếp hạng hiện tại:</div>';
+  previewHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">';
+  Object.entries(standings).forEach(([gName, st]) => {
+    previewHtml += '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px">';
+    previewHtml += '<div style="font-weight:700;font-size:11px;color:var(--accent);margin-bottom:4px">' + gName + '</div>';
+    st.forEach((p, i) => {
+      previewHtml += '<div style="font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+        + '<span style="color:var(--muted);margin-right:4px">' + (i+1) + '.</span>'
+        + '<span>' + p.name + '</span>'
+        + '<span style="float:right;color:var(--accent);font-weight:700">' + p.p + 'đ</span>'
+        + '</div>';
+    });
+    previewHtml += '</div>';
+  });
+  previewHtml += '</div>';
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h3 style="margin:0;font-size:16px;font-family:'Barlow Condensed',sans-serif;font-weight:900;letter-spacing:1px">⚡ CHUYỂN SANG KNOCKOUT</h3>
+      <button onclick="document.getElementById('phase2Modal').remove()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    ${previewHtml}
+    <div>
+      <div class="field-label" style="margin-bottom:6px">Lấy bao nhiêu VĐV/bảng vào Knockout</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="phase2TopNBtns">
+        ${[1,2,3].filter(n => n <= maxPerGroup).map(n =>
+          '<button class="btn btn-secondary phase2-topn-btn" data-n="'+n+'" style="width:auto;padding:6px 14px;font-family:Barlow Condensed,sans-serif;font-weight:700" onclick="phase2SelectN('+n+')">Top '+n+'</button>'
+        ).join('')}
+        <button class="btn btn-secondary phase2-topn-btn" data-n="custom" style="width:auto;padding:6px 14px;font-family:Barlow Condensed,sans-serif;font-weight:700" onclick="phase2SelectN('custom')">Tùy chỉnh</button>
+      </div>
+      <div id="phase2CustomNWrap" style="display:none;margin-top:8px">
+        <input type="number" id="phase2CustomN" min="1" max="${maxPerGroup}" placeholder="Nhập số VĐV/bảng" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;width:100%;font-size:13px"/>
+      </div>
+    </div>
+    <div>
+      <div class="field-label" style="margin-bottom:6px">Kiểu bắt cặp vào Knockout</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="phase2PairModeBtns">
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="cross" onclick="phase2SelectPair('cross')" style="text-align:left;padding:8px 12px">
+          <div style="font-weight:700;font-size:12px">🔀 Chéo bảng</div>
+          <div style="font-size:11px;color:var(--muted)">Nhất A gặp Nhì B, Nhất B gặp Nhì A...</div>
+        </button>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="controlled" onclick="phase2SelectPair('controlled')" style="text-align:left;padding:8px 12px">
+          <div style="font-weight:700;font-size:12px">🎲 Bốc thăm có kiểm soát</div>
+          <div style="font-size:11px;color:var(--muted)">Random nhưng nhất không gặp nhất, cùng bảng không gặp nhau vòng 1</div>
+        </button>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="random" onclick="phase2SelectPair('random')" style="text-align:left;padding:8px 12px">
+          <div style="font-weight:700;font-size:12px">🎰 Bốc thăm hoàn toàn ngẫu nhiên</div>
+          <div style="font-size:11px;color:var(--muted)">Không có ràng buộc gì</div>
+        </button>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="ranked" onclick="phase2SelectPair('ranked')" style="text-align:left;padding:8px 12px">
+          <div style="font-weight:700;font-size:12px">📊 Theo thứ hạng tổng</div>
+          <div style="font-size:11px;color:var(--muted)">Xếp hạng chung tất cả bảng: #1 gặp #cuối, #2 gặp #áp chót...</div>
+        </button>
+      </div>
+    </div>
+    <div id="phase2Preview" style="display:none">
+      <div class="field-label" style="margin-bottom:6px">Danh sách VĐV vào Knockout</div>
+      <div id="phase2PreviewList" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="document.getElementById('phase2Modal').remove()">Hủy</button>
+      <button class="btn" id="phase2ConfirmBtn" style="width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700;opacity:.4;cursor:not-allowed" disabled onclick="confirmPhase2()">⚡ Bắt đầu Knockout</button>
+    </div>`;
+
+  // State tạm cho modal
+  window._phase2Config = { n: null, pairMode: null, standings };
+}
+
+let _phase2SelectedN = null;
+let _phase2SelectedMode = null;
+
+function phase2SelectN(n) {
+  _phase2SelectedN = n;
+  document.querySelectorAll('.phase2-topn-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.n == String(n));
+    b.style.background = b.dataset.n == String(n) ? 'var(--accent)' : '';
+    b.style.color = b.dataset.n == String(n) ? '#000' : '';
+  });
+  const wrap = document.getElementById('phase2CustomNWrap');
+  if (wrap) wrap.style.display = n === 'custom' ? 'block' : 'none';
+  phase2UpdatePreview();
+}
+
+function phase2SelectPair(mode) {
+  _phase2SelectedMode = mode;
+  document.querySelectorAll('.phase2-pair-btn').forEach(b => {
+    const active = b.dataset.mode === mode;
+    b.style.borderColor = active ? 'var(--accent)' : '';
+    b.style.background = active ? 'rgba(232,160,32,.12)' : '';
+  });
+  phase2UpdatePreview();
+}
+
+function phase2GetN() {
+  if (_phase2SelectedN === 'custom') {
+    const v = parseInt(document.getElementById('phase2CustomN')?.value);
+    return isNaN(v) || v < 1 ? null : v;
+  }
+  return _phase2SelectedN;
+}
+
+function phase2UpdatePreview() {
+  const n = phase2GetN();
+  const mode = _phase2SelectedMode;
+  const confirmBtn = document.getElementById('phase2ConfirmBtn');
+  const previewDiv = document.getElementById('phase2Preview');
+  const previewList = document.getElementById('phase2PreviewList');
+  if (!confirmBtn || !previewDiv || !previewList) return;
+
+  if (!n || !mode) {
+    confirmBtn.disabled = true;
+    confirmBtn.style.opacity = '.4';
+    confirmBtn.style.cursor = 'not-allowed';
+    previewDiv.style.display = 'none';
+    return;
+  }
+
+  // Lấy danh sách VĐV
+  const qualified = phase2GetQualified(n);
+  const paired = phase2BuildPairs(qualified, mode);
+
+  previewDiv.style.display = 'block';
+  let html = '<table style="width:100%;border-collapse:collapse">';
+  html += '<tr><th style="text-align:left;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 1</th><th style="text-align:center;padding:3px 6px;color:var(--muted);font-size:10px">vs</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 2</th></tr>';
+  paired.forEach((pair, i) => {
+    html += '<tr style="border-top:1px solid rgba(255,255,255,.05)">'
+      + '<td style="padding:3px 6px;font-size:11px">' + pair[0] + '</td>'
+      + '<td style="text-align:center;color:var(--muted);font-size:10px">vs</td>'
+      + '<td style="text-align:right;padding:3px 6px;font-size:11px">' + pair[1] + '</td>'
+      + '</tr>';
+  });
+  html += '</table>';
+  previewList.innerHTML = html;
+
+  confirmBtn.disabled = false;
+  confirmBtn.style.opacity = '1';
+  confirmBtn.style.cursor = 'pointer';
+}
+
+function phase2GetQualified(n) {
+  // Trả về mảng [{name, groupName, rank, points, diff, scored}]
+  const result = [];
+  S.groups.forEach((players, gi) => {
+    const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+    const st = calcRRStandings(gName, players);
+    st.slice(0, n).forEach((p, rank) => {
+      result.push({ name: p.name, groupName: gName, rank, p: p.p, diff: p.diff, scored: p.scored });
+    });
+  });
+  return result;
+}
+
+function phase2BuildPairs(qualified, mode) {
+  const total = qualified.length;
+  // Làm tròn lên lũy thừa 2 gần nhất
+  let bracketSize = 1;
+  while (bracketSize < total) bracketSize <<= 1;
+
+  if (mode === 'cross') {
+    // Chéo bảng: nhất A vs nhì B, nhất B vs nhì A...
+    const byRank = {};
+    qualified.forEach(p => {
+      if (!byRank[p.rank]) byRank[p.rank] = [];
+      byRank[p.rank].push(p);
+    });
+    const firsts = (byRank[0] || []);
+    const seconds = (byRank[1] || []);
+    const others = qualified.filter(p => p.rank >= 2);
+    const pairs = [];
+    // Ghép nhất bảng này với nhì bảng khác
+    for (let i = 0; i < firsts.length; i++) {
+      const opponent = seconds.find(s => s.groupName !== firsts[i].groupName) || seconds[i % seconds.length];
+      if (opponent) pairs.push([firsts[i].name, opponent.name]);
+    }
+    // Phần còn lại ghép random
+    const used = new Set(pairs.flatMap(p => p));
+    const remaining = shuffle(qualified.filter(p => !used.has(p.name)).map(p => p.name));
+    for (let i = 0; i < remaining.length - 1; i += 2) {
+      pairs.push([remaining[i], remaining[i+1]]);
+    }
+    return pairs;
+  }
+
+  if (mode === 'controlled') {
+    // Random nhưng nhất không gặp nhất, cùng bảng không gặp nhau
+    return phase2ControlledDraw(qualified);
+  }
+
+  if (mode === 'random') {
+    // Hoàn toàn ngẫu nhiên
+    const names = shuffle(qualified.map(p => p.name));
+    const pairs = [];
+    for (let i = 0; i < names.length - 1; i += 2) pairs.push([names[i], names[i+1]]);
+    return pairs;
+  }
+
+  if (mode === 'ranked') {
+    // Xếp hạng tổng: #1 gặp #cuối, #2 gặp áp chót
+    const sorted = [...qualified].sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (b.p !== a.p) return b.p - a.p;
+      if (b.diff !== a.diff) return b.diff - a.diff;
+      return b.scored - a.scored;
+    });
+    const pairs = [];
+    let lo = 0, hi = sorted.length - 1;
+    while (lo < hi) { pairs.push([sorted[lo].name, sorted[hi].name]); lo++; hi--; }
+    return pairs;
+  }
+
+  return [];
+}
+
+function phase2ControlledDraw(qualified) {
+  // Tách nhất bảng và phần còn lại
+  const firsts = shuffle(qualified.filter(p => p.rank === 0));
+  const others = shuffle(qualified.filter(p => p.rank > 0));
+  const pairs = [];
+  const usedGroups = new Set();
+
+  // Mỗi nhất bảng ghép với một người từ bảng khác
+  firsts.forEach(f => {
+    const candidate = others.find(o => o.groupName !== f.groupName && !pairs.some(p => p.includes(o.name)));
+    if (candidate) {
+      pairs.push([f.name, candidate.name]);
+    }
+  });
+
+  // Phần còn lại ghép random tránh cùng bảng
+  const used = new Set(pairs.flatMap(p => p));
+  const remaining = qualified.filter(p => !used.has(p.name));
+  const shuffled = shuffle(remaining);
+  for (let i = 0; i < shuffled.length - 1; i += 2) {
+    // Thử tránh cùng bảng
+    let j = i + 1;
+    for (let k = j; k < shuffled.length; k++) {
+      if (shuffled[k].groupName !== shuffled[i].groupName) { j = k; break; }
+    }
+    [shuffled[i+1], shuffled[j]] = [shuffled[j], shuffled[i+1]];
+    pairs.push([shuffled[i].name, shuffled[i+1].name]);
+  }
+  return pairs;
+}
+
+async function confirmPhase2() {
+  const n = phase2GetN();
+  const mode = _phase2SelectedMode;
+  if (!n || !mode) return;
+
+  const qualified = phase2GetQualified(n);
+  const pairs = phase2BuildPairs(qualified, mode);
+
+  if (!pairs.length) { alert('Không đủ VĐV để tạo bracket.'); return; }
+
+  if (!confirm('Chuyển sang Knockout với ' + qualified.length + ' VĐV?\n\nDữ liệu vòng bảng sẽ được giữ nguyên.')) return;
+
+  // Lưu lại toàn bộ dữ liệu RR vào phase1RRData
+  S.phase1RRData = {
+    groups: JSON.parse(JSON.stringify(S.groups)),
+    pairsByGroup: JSON.parse(JSON.stringify(S.pairsByGroup)),
+    rrResults: JSON.parse(JSON.stringify(S.rrResults)),
+    schedule: JSON.parse(JSON.stringify(S.schedule)),
+    scheduleType: S.scheduleType,
+    showRRSchedule: S.showRRSchedule,
+  };
+  S.phase = 2;
+
+  // Reset KO data
+  S.knockoutSlots = [];
+  S.knockoutRounds = [];
+  S.knockoutMatchNos = {};
+  S.knockoutResults = {};
+  S.schedule = [];
+  S.scheduleType = null;
+
+  // Build slots từ pairs (mỗi pair là 1 trận vòng 1)
+  // Flatten pairs thành slots: [p1_match1, p2_match1, p1_match2, p2_match2, ...]
+  const slots = [];
+  pairs.forEach(p => { slots.push(p[0]); slots.push(p[1]); });
+  // Pad lên lũy thừa 2 nếu cần
+  let bracketSize = 1;
+  while (bracketSize < slots.length) bracketSize <<= 1;
+  while (slots.length < bracketSize) slots.push('BYE');
+
+  S.knockoutSlots = slots;
+  S.mode = 'knockout';
+  S.show3rdPlace = false;
+
+  rebuildKnockoutTree();
+
+  // Cập nhật UI
+  document.getElementById('selMode').value = 'knockout';
+  document.getElementById('knockoutActions').style.display = 'block';
+  document.getElementById('roundrobinActions').style.display = 'none';
+
+  // Lưu lên Supabase
+  if (S._tournamentId) {
+    showLoading('Đang lưu...');
+    try {
+      await saveTournamentData(S._tournamentId, buildSnapshot());
+      hideLoading();
+    } catch(e) { hideLoading(); console.error(e); }
+  }
+
+  document.getElementById('phase2Modal').remove();
+  _phase2SelectedN = null;
+  _phase2SelectedMode = null;
+  renderContent();
+
+  alert('✅ Đã chuyển sang Knockout với ' + qualified.length + ' VĐV!\nBắt đầu xếp lịch và thi đấu.');
+}
+
+function openPhase1View() {
+  // Quay lại xem kết quả vòng bảng (read-only)
+  if (!S.phase1RRData) { alert('Không có dữ liệu vòng bảng.'); return; }
+  const d = S.phase1RRData;
+  // Tạm thời swap state để renderRRView
+  const saved = {
+    mode: S.mode, groups: S.groups, pairsByGroup: S.pairsByGroup,
+    rrResults: S.rrResults, schedule: S.schedule, scheduleType: S.scheduleType,
+    showRRSchedule: S.showRRSchedule
+  };
+  S.mode = 'roundrobin';
+  S.groups = d.groups; S.pairsByGroup = d.pairsByGroup;
+  S.rrResults = d.rrResults; S.schedule = d.schedule;
+  S.scheduleType = d.scheduleType; S.showRRSchedule = d.showRRSchedule;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'phase1ViewOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:99998;overflow-y:auto;padding:16px';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:16px;position:sticky;top:0;background:var(--bg);padding-bottom:12px;border-bottom:1px solid var(--border);z-index:1';
+  header.innerHTML = '<span style="font-family:Barlow Condensed,sans-serif;font-weight:900;font-size:18px">📋 Kết quả Vòng bảng</span>';
+  const closeBtn2 = document.createElement('button');
+  closeBtn2.className = 'btn btn-secondary';
+  closeBtn2.style.cssText = 'width:auto;padding:6px 14px;margin-left:auto';
+  closeBtn2.textContent = '✕ Đóng';
+  closeBtn2.onclick = function() {
+    var el = document.getElementById('phase1ViewOverlay');
+    if (el) el.remove();
+    if (window._phase1SavedState) { Object.assign(S, window._phase1SavedState); delete window._phase1SavedState; }
+    renderContent();
+  };
+  header.appendChild(closeBtn2);
+  overlay.appendChild(header);
+
+  window._phase1SavedState = saved;
+  const container = document.createElement('div');
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+
+  renderRRView(container);
+
+  // Restore state sau khi render
+  S.mode = saved.mode; S.groups = saved.groups; S.pairsByGroup = saved.pairsByGroup;
+  S.rrResults = saved.rrResults; S.schedule = saved.schedule;
+  S.scheduleType = saved.scheduleType; S.showRRSchedule = saved.showRRSchedule;
+}
+
+/* ════════════════════════════════════════
    SCHEDULE BUILDERS
 ════════════════════════════════════════ */
 function buildKOSchedule(matches, courts, phut, start) {
@@ -3047,6 +3443,16 @@ function renderContent() {
 /* ── KNOCKOUT VIEW ── */
 function renderKnockoutView(container) {
   if (!S.knockoutSlots || !S.knockoutSlots.length) return;
+
+  // Phase 2: hiện banner thông báo và nút xem lại vòng bảng
+  if (S.phase === 2 && S.phase1RRData) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:linear-gradient(135deg,rgba(232,160,32,.15),rgba(249,115,22,.1));border:1px solid rgba(232,160,32,.4);border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+    banner.innerHTML = '<span style="font-size:13px;font-weight:600">⚡ <strong>Phase 2 – Vòng Knockout</strong> (tiếp theo vòng bảng)</span>'
+      + '<button class="btn btn-secondary" style="width:auto;padding:5px 12px;font-size:11px;margin-left:auto" onclick="openPhase1View()">📋 Xem kết quả vòng bảng</button>';
+    container.appendChild(banner);
+  }
+
   const hasSchedule = S.schedule && S.schedule.length > 0;
 
   const tabs = document.createElement('div');
