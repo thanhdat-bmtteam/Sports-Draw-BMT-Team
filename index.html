@@ -2579,8 +2579,7 @@ function saveKnockoutResult(ri, mi) {
       winner: winner, created_at: new Date().toISOString(),
     };
     _cachedReports[matchKey] = reportData;
-    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
-      .catch(e => console.warn('auto-saveReport KO:', e));
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' });
   }
   renderContent();
   if (S.schedule && S.schedule.length) showTab('matches');
@@ -2695,8 +2694,7 @@ function saveRRResult(groupName, idx) {
       winner: winner || '', created_at: new Date().toISOString(),
     };
     _cachedReports[rrMatchKey] = reportData;
-    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
-      .catch(e => console.warn('auto-saveReport RR:', e));
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' });
   }
   renderContent();
   showTabRR('matches');
@@ -5458,8 +5456,9 @@ async function saveRRResultFromPopup(inputId, pairIdx, gName) {
         winner: winner || '', created_at: new Date().toISOString(),
       };
       _cachedReports[rrMatchKey] = reportData;
-      getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
-        .then(function(r){ if (r.error) console.warn('saveReport RR:', r.error); });
+      // Supabase JS v2: dùng await, không dùng .then()/.catch()
+      const { error: repErr } = await getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' });
+      if (repErr) console.warn('saveReport RR:', repErr);
     } catch(e) {
       console.error('saveRRResultFromPopup:', e);
       alert('❌ Lỗi lưu kết quả: ' + e.message);
@@ -5520,8 +5519,7 @@ function save3rdResult(p1, p2) {
       winner: winner || '', created_at: new Date().toISOString(),
     };
     _cachedReports['3rd'] = reportData;
-    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
-      .catch(e => console.warn('auto-saveReport 3rd:', e));
+    getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' });
   }
   renderContent();
   showTab('matches');
