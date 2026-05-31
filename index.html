@@ -1190,7 +1190,7 @@
       <div style="display:flex;flex-direction:column;gap:7px">
         <button class="btn btn-secondary" onclick="showScheduleConfig('roundrobin')">📅 Xếp lịch thi đấu</button>
         <button class="btn btn-secondary" onclick="openRoundSettings()">⚙️ Cài đặt số set theo vòng</button>
-        <button class="btn" style="background:linear-gradient(135deg,#e8a020,#f97316);color:#000;font-weight:700;margin-top:4px" onclick="openPhase2Modal()">⚡ Chuyển sang Knockout</button>
+        <button class="btn" id="btnPhase2" style="background:linear-gradient(135deg,#e8a020,#f97316);color:#000;font-weight:700;margin-top:4px;display:none" onclick="openPhase2Modal()">⚡ Chuyển sang Knockout</button>
       </div>
     </div>
     <hr class="divider"/>
@@ -1680,6 +1680,12 @@ function applyPermissions() {
   const btnSaveOver = document.getElementById('btnSaveOverSidebar');
   if (btnSaveOver) {
     btnSaveOver.style.display = (role === 'admin' && S._tournamentId) ? 'block' : 'none';
+  }
+
+  // Nút chuyển sang Knockout — admin + VIP
+  const btnPhase2 = document.getElementById('btnPhase2');
+  if (btnPhase2) {
+    btnPhase2.style.display = ['admin','user_vip'].includes(role) ? 'block' : 'none';
   }
 }
 
