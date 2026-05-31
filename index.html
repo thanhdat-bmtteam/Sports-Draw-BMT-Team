@@ -3570,7 +3570,6 @@ async function renderRRMatchesWithScore(container) {
 
       const safeGName = gName.replace(/'/g,"\\'");
       // DEBUG: log gName and pairIdx being set on buttons
-      if (typeof console !== 'undefined') console.log('[RR render] gName:', JSON.stringify(gName), 'pairIdx:', pairIdx);
       // match_key: rr::GroupName::pairIdx — dùng :: để parse chính xác
       const rrMatchKey = 'rr::' + gName + '::' + pairIdx;
       const rrSafeKey  = 'rr_' + gName.replace(/[^a-zA-Z0-9]/g,'_') + '_' + pairIdx;
@@ -5357,9 +5356,8 @@ function downloadMatchReport(matchKey) {
 }
 
 function openRRScoreInput(rawGName, pairIdx) {
-  console.log('[openRRScoreInput] called:', rawGName, pairIdx);
-  console.log('[openRRScoreInput] pairsByGroup keys:', Object.keys(S.pairsByGroup || {}));
-  console.log('[openRRScoreInput] can result:', can('result'), 'role:', AUTH.currentUser?.role);
+
+
   try {
   const existing = document.getElementById('scoreInputOverlay');
   if (existing) existing.remove();
@@ -5370,13 +5368,9 @@ function openRRScoreInput(rawGName, pairIdx) {
     : (Object.keys(S.pairsByGroup || {}).find(function(k) {
         return k === rawGName || k.replace(/[^a-zA-Z0-9]/g,'_') === rawGName || rawGName.replace(/[^a-zA-Z0-9]/g,'_') === k.replace(/[^a-zA-Z0-9]/g,'_');
       }) || rawGName);
-
-  console.log('[openRRScoreInput] resolved gName:', gName);
   const pairs = S.pairsByGroup[gName] || [];
-  console.log('[openRRScoreInput] pairs count:', pairs.length, 'pairIdx:', pairIdx);
   const pair = pairs[pairIdx] || [];
   const p1 = pair[0] || '?', p2 = pair[1] || '?';
-  console.log('[openRRScoreInput] p1:', p1, 'p2:', p2);
   const existingResult = S.rrResults[gName + ':' + pairIdx];
   const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
   const rsRR = getRoundSetting(gName);
@@ -5433,8 +5427,7 @@ function openRRScoreInput(rawGName, pairIdx) {
   } catch(e) { console.error('openRRScoreInput error:', e); alert('❌ Lỗi mở hộp nhập điểm: ' + e.message); }
 }
 
-function saveRRResultFromPopup(inputId, pairIdx, gName) {
-  // inputId đã được sanitize từ openRRScoreInput, dùng trực tiếp
+async function saveRRResultFromPopup(inputId, pairIdx, gName) {
   const sets = collectSets('rr', inputId);
   if (!sets) { alert('Vui lòng nhập ít nhất 1 set hợp lệ.'); return; }
   const w1 = sets.filter(s => s.s1 > s.s2).length;
@@ -5445,8 +5438,34 @@ function saveRRResultFromPopup(inputId, pairIdx, gName) {
   const totS1 = sets.reduce((a,s) => a+s.s1, 0);
   const totS2 = sets.reduce((a,s) => a+s.s2, 0);
   S.rrResults[gName + ':' + pairIdx] = { s1: totS1, s2: totS2, w1, w2, sets, winner };
-  if (S._tournamentId) saveTournamentData(S._tournamentId, buildSnapshot()).catch(e => console.error(e));
+
   const ol = document.getElementById('scoreInputOverlay'); if (ol) ol.remove();
+
+  if (S._tournamentId) {
+    try {
+      await saveTournamentData(S._tournamentId, buildSnapshot());
+      // Lưu biên bản
+      const rrMatchKey = 'rr::' + gName + '::' + pairIdx;
+      const reportData = {
+        tournament_id: S._tournamentId,
+        match_key: rrMatchKey,
+        match_label: gName + ' - Trận ' + (pairIdx + 1),
+        referee: AUTH.currentUser?.displayName || AUTH.currentUser?.username || '',
+        name1: match[0] || '', name2: match[1] || '',
+        sets: sets, set_times: [], point_log: [], shuttle: 0,
+        total_elapsed: 0, start_time: null,
+        end_time: new Date().toISOString(),
+        winner: winner || '', created_at: new Date().toISOString(),
+      };
+      _cachedReports[rrMatchKey] = reportData;
+      getDB().from('bmt_match_reports').upsert(reportData, { onConflict: 'match_key' })
+        .then(function(r){ if (r.error) console.warn('saveReport RR:', r.error); });
+    } catch(e) {
+      console.error('saveRRResultFromPopup:', e);
+      alert('❌ Lỗi lưu kết quả: ' + e.message);
+      return;
+    }
+  }
   renderContent();
   showTabRR('matches');
 }
