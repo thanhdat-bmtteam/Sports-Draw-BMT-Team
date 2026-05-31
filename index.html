@@ -2064,6 +2064,46 @@ async function loadTournament(id) {
     if (!tdata) { alert('Không tìm thấy dữ liệu.'); return; }
     Object.assign(S, tdata);
     S._tournamentId = id;
+
+    // FIX: Khôi phục kết quả bị mất do race condition từ bmt_match_reports
+    try {
+      const rRes = await getDB().from('bmt_match_reports').select('match_key,name1,name2,sets,winner').eq('tournament_id', id);
+      if (rRes.data && rRes.data.length > 0) {
+        S.knockoutResults = S.knockoutResults || {};
+        S.rrResults = S.rrResults || {};
+        let recovered = 0;
+        rRes.data.forEach(function(r) {
+          const mk = r.match_key;
+          if (!mk || !r.sets || !r.sets.length) return;
+          if (mk.startsWith('rr::')) {
+            const parts = mk.split('::');
+            const key = parts[1] + ':' + parts[2];
+            if (!S.rrResults[key]) {
+              const w1 = r.sets.filter(function(s){ return s.s1 > s.s2; }).length;
+              const w2 = r.sets.filter(function(s){ return s.s2 > s.s1; }).length;
+              S.rrResults[key] = { s1: w1, s2: w2, w1, w2, sets: r.sets, winner: r.winner };
+              recovered++;
+            }
+          } else {
+            if (!S.knockoutResults[mk]) {
+              const w1 = r.sets.filter(function(s){ return s.s1 > s.s2; }).length;
+              const w2 = r.sets.filter(function(s){ return s.s2 > s.s1; }).length;
+              S.knockoutResults[mk] = { s1: w1, s2: w2, w1, w2, sets: r.sets, winner: r.winner };
+              if (mk !== '3rd' && r.winner) {
+                const parts = mk.split(',');
+                if (parts.length === 2) advanceKnockoutWinner(parseInt(parts[0]), parseInt(parts[1]), r.winner);
+              }
+              recovered++;
+            }
+          }
+        });
+        if (recovered > 0) {
+          console.log('[BMT] Khôi phục ' + recovered + ' kết quả bị thiếu từ biên bản.');
+          saveTournamentData(id, buildSnapshot()).catch(function(){});
+        }
+      }
+    } catch(e2) { console.warn('[BMT] Không thể khôi phục kết quả từ biên bản:', e2); }
+
     onTournamentLoaded(id);
     saveSession(id);
     closeAdminModal();
@@ -3243,7 +3283,10 @@ async function renderKOMatchesTable(container) {
       ${scoreTd}
       <td class="${p2Class}">${p2}</td>
       ${refCell}
-      ${canEdit ? '<td>' + (report ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKey + '\')">📄 Biên bản</button>' : '') + '</td>' : ''}
+      ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+        + (report ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKey + '\')">📄 Biên bản</button>' : '')
+        + ((asgn || result) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
+        + '</td>' : ''}
     </tr>`;
   }
 
@@ -3313,7 +3356,10 @@ async function renderKOMatchesTable(container) {
       ${scoreFinal}
       <td class="${fp2Class}">${fp2}</td>
       ${refCellF}
-      ${canEdit ? '<td>' + (_cachedReports[aKeyF] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKeyF + '\')">📄 Biên bản</button>' : '') + '</td>' : ''}
+      ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+        + (_cachedReports[aKeyF] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'' + aKeyF + '\')">📄 Biên bản</button>' : '')
+        + ((_cachedAssignments[aKeyF] || fResult) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch(' + ri + ',' + mi + ')">🗑️ Đặt lại</button>' : '')
+        + '</td>' : ''}
     </tr></tbody></table>`;
   }
 
@@ -3395,7 +3441,10 @@ async function renderKOMatchesTable(container) {
         ${score3}
         <td class="${p2Class3}">${p2_3rd}</td>
         ${refCell3}
-        ${canEdit ? '<td>' + (_cachedReports['3rd'] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'3rd\')">📄 Biên bản</button>' : '') + '</td>' : ''}
+        ${canEdit ? '<td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+          + (_cachedReports['3rd'] ? '<button class="btn-save-score" style="background:rgba(59,130,246,.15);color:#3b82f6;border-color:rgba(59,130,246,.3)" onclick="downloadMatchReport(\'3rd\')">📄 Biên bản</button>' : '')
+          + ((asgn3rd || result3) ? '<button class="btn-save-score" style="background:rgba(239,68,68,.12);color:#ef4444;border-color:rgba(239,68,68,.3)" title="Xóa phân công + kết quả, đặt lại trận" onclick="resetMatch3rd()">🗑️ Đặt lại</button>' : '')
+          + '</td>' : ''}
       </tr></tbody></table>`;
     }
   }
@@ -4091,6 +4140,122 @@ async function cancelAssignment(id) {
     alert('❌ Lỗi xóa: ' + e.message);
   }
 }
+async function resetMatch(ri, mi) {
+  if (!can('result')) { alert('⛔ Bạn không có quyền thực hiện thao tác này.'); return; }
+  if (!S._tournamentId) return;
+
+  const aKey = ri + ',' + mi;
+  const asgn = _cachedAssignments[aKey];
+  const hasResult = !!S.knockoutResults[aKey];
+  const hasReport = !!_cachedReports[aKey];
+
+  const lines = [];
+  if (asgn) lines.push('• Xóa phân công trọng tài (' + (asgn.referee || '') + ')');
+  if (hasResult) lines.push('• Xóa kết quả / tỉ số trận');
+  if (hasReport) lines.push('• Xóa biên bản trận');
+  lines.push('• Xóa live score (nếu có)');
+
+  if (!lines.length) { alert('Trận này chưa có dữ liệu gì để xóa.'); return; }
+
+  if (!confirm('⚠️ Đặt lại trận #' + (ri + ',' + mi) + '?\n\nSẽ xóa:\n' + lines.join('\n') + '\n\nHành động này không thể hoàn tác!')) return;
+
+  showLoading('Đang đặt lại trận...');
+  try {
+    // 1. Xóa assignment
+    if (asgn) {
+      await deleteAssignment(asgn.id);
+      delete _cachedAssignments[aKey];
+    }
+
+    // 2. Xóa live score
+    const liveKey = S._tournamentId + ':' + aKey;
+    await deleteLiveScore(liveKey);
+
+    // 3. Xóa biên bản
+    if (hasReport) {
+      await getDB().from('bmt_match_reports').delete().eq('match_key', aKey).eq('tournament_id', S._tournamentId);
+      delete _cachedReports[aKey];
+    }
+
+    // 4. Xóa kết quả khỏi state + dọn cây bracket
+    if (hasResult) {
+      const winner = S.knockoutResults[aKey] ? S.knockoutResults[aKey].winner : null;
+      delete S.knockoutResults[aKey];
+
+      // Xóa winner khỏi slot vòng tiếp theo
+      const nextRi = ri + 1;
+      const nextMi = Math.floor(mi / 2);
+      const slot = mi % 2 === 0 ? 'p1' : 'p2';
+      if (winner && S.knockoutRounds[nextRi] && S.knockoutRounds[nextRi][nextMi]) {
+        const nextNode = S.knockoutRounds[nextRi][nextMi];
+        // Chỉ xóa nếu đúng là winner này đang giữ slot
+        if (nextNode[slot] === winner) {
+          nextNode[slot] = 'Thắng trận ' + (S.knockoutMatchNos[aKey] || (ri + ',' + mi));
+        }
+        // Nếu vòng tiếp theo đã có kết quả → xóa luôn (kết quả không còn hợp lệ)
+        const nextKey = nextRi + ',' + nextMi;
+        if (S.knockoutResults[nextKey]) {
+          delete S.knockoutResults[nextKey];
+        }
+      }
+
+      rebuildKnockoutTree();
+      await saveTournamentData(S._tournamentId, buildSnapshot());
+    }
+
+    hideLoading();
+    renderContent();
+    if (S.schedule && S.schedule.length) showTab('matches');
+    alert('✅ Đã đặt lại trận. Có thể phân công lại hoặc nhập điểm thủ công.');
+  } catch(e) {
+    hideLoading();
+    alert('❌ Lỗi: ' + e.message);
+  }
+}
+
+async function resetMatch3rd() {
+  if (!can('result')) { alert('⛔ Bạn không có quyền thực hiện thao tác này.'); return; }
+  if (!S._tournamentId) return;
+
+  const asgn3 = _cachedAssignments['3rd'];
+  const hasResult = !!(S.knockoutResults && S.knockoutResults['3rd']);
+  const hasReport = !!_cachedReports['3rd'];
+
+  const lines = [];
+  if (asgn3) lines.push('• Xóa phân công trọng tài (' + (asgn3.referee || '') + ')');
+  if (hasResult) lines.push('• Xóa kết quả / tỉ số trận hạng ba');
+  if (hasReport) lines.push('• Xóa biên bản trận');
+  lines.push('• Xóa live score (nếu có)');
+
+  if (!lines.length) { alert('Trận hạng ba chưa có dữ liệu gì để xóa.'); return; }
+
+  if (!confirm('⚠️ Đặt lại trận tranh Hạng Ba?\n\nSẽ xóa:\n' + lines.join('\n') + '\n\nHành động này không thể hoàn tác!')) return;
+
+  showLoading('Đang đặt lại trận...');
+  try {
+    if (asgn3) {
+      await deleteAssignment(asgn3.id);
+      delete _cachedAssignments['3rd'];
+    }
+    const liveKey = S._tournamentId + ':3rd';
+    await deleteLiveScore(liveKey);
+    if (hasReport) {
+      await getDB().from('bmt_match_reports').delete().eq('match_key', '3rd').eq('tournament_id', S._tournamentId);
+      delete _cachedReports['3rd'];
+    }
+    if (hasResult) {
+      delete S.knockoutResults['3rd'];
+      await saveTournamentData(S._tournamentId, buildSnapshot());
+    }
+    hideLoading();
+    renderContent();
+    alert('✅ Đã đặt lại trận hạng ba. Có thể phân công lại hoặc nhập điểm thủ công.');
+  } catch(e) {
+    hideLoading();
+    alert('❌ Lỗi: ' + e.message);
+  }
+}
+
 async function getMyAssignment(username) {
   const { data, error } = await getDB()
     .from('bmt_assignments')
@@ -5079,33 +5244,79 @@ function openScoreInput(ri, mi) {
   const existing = document.getElementById('scoreInputOverlay');
   if (existing) existing.remove();
 
+  const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
+  const existingResult = S.knockoutResults[ri + ',' + mi];
+  const schedRef = (S.schedule || []).find(function(r){ return (r.ri+','+r.mi) === ri+','+mi; });
+
+  // Lấy tên từ nhiều nguồn: node → schedule → result
+  let p1 = (node && node.p1) || (schedRef && schedRef.vdv1) || (existingResult && existingResult.name1) || (existingResult && existingResult.winner) || '';
+  let p2 = (node && node.p2) || (schedRef && schedRef.vdv2) || (existingResult && existingResult.name2) || '';
+
+  // Nếu tên là placeholder "Thắng trận X" → chưa xác định VĐV
+  // Vẫn cho nhập nhưng hiện cảnh báo, và cho phép nhập tên tay
+  const p1IsPlaceholder = !p1 || String(p1).startsWith('Thắng') || String(p1).startsWith('BYE');
+  const p2IsPlaceholder = !p2 || String(p2).startsWith('Thắng') || String(p2).startsWith('BYE');
+
+  const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
+  const rsRef = getRoundSetting(schedRef ? schedRef.roundName : '');
+  const inputRows = buildSetInputRowsPrefilled('ko', ri+'_'+mi, prefillSets, rsRef.maxSets);
+
+  const warningHtml = (p1IsPlaceholder || p2IsPlaceholder)
+    ? '<div style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:8px;padding:10px 12px;font-size:12px;color:#fbbf24">'
+      + '⚠️ Tên VĐV chưa xác định. Nhập tay tên VĐV bên dưới trước khi lưu.</div>'
+      + '<div style="display:flex;flex-direction:column;gap:8px">'
+      + '<input id="scoreInputP1" placeholder="Tên VĐV 1 (bên trái)" value="' + (p1IsPlaceholder ? '' : p1.replace(/"/g,'&quot;')) + '" style="background:#0d1120;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px"/>'
+      + '<input id="scoreInputP2" placeholder="Tên VĐV 2 (bên phải)" value="' + (p2IsPlaceholder ? '' : p2.replace(/"/g,'&quot;')) + '" style="background:#0d1120;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px"/>'
+      + '</div>'
+    : '';
+
   const overlay = document.createElement('div');
   overlay.id = 'scoreInputOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
 
   const box = document.createElement('div');
   box.style.cssText = 'background:#1a2035;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;color:#f0f4ff';
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
-  const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
-  const existingResult = S.knockoutResults[ri + ',' + mi];
-  const prefillSets = existingResult && existingResult.sets ? existingResult.sets : null;
-  const schedRef = (S.schedule || []).find(function(r){ return (r.ri+','+r.mi) === ri+','+mi; });
-  // Lấy tên từ nhiều nguồn: node → schedule → result
-  const p1 = (node && node.p1) || (schedRef && schedRef.vdv1) || (existingResult && existingResult.winner) || '?';
-  const p2 = (node && node.p2) || (schedRef && schedRef.vdv2) || '?';
-  const rsRef = getRoundSetting(schedRef ? schedRef.roundName : '');
-  const inputRows = buildSetInputRowsPrefilled('ko', ri+'_'+mi, prefillSets, rsRef.maxSets);
-
   box.innerHTML = '<div style="font-size:16px;font-weight:700">✏️ ' + (existingResult ? 'Sửa điểm' : 'Nhập điểm thủ công') + '</div>'
-    + '<div style="font-size:13px;color:var(--muted)">' + p1 + ' vs ' + p2 + '</div>'
+    + (warningHtml || '<div style="font-size:13px;color:var(--muted)">' + p1 + ' vs ' + p2 + '</div>')
     + '<div style="font-size:11px;color:var(--muted)">Để trống set không đấu</div>'
     + '<div id="scoreInputRows">' + inputRows + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end">'
     + '<button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="document.getElementById(\'scoreInputOverlay\').remove()">Hủy</button>'
-    + '<button class="btn" style="width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700" onclick="saveKnockoutResult('+ri+','+mi+');document.getElementById(\'scoreInputOverlay\').remove()">✓ Lưu</button>'
+    + '<button class="btn" style="width:auto;padding:8px 20px;background:var(--accent);color:#000;font-weight:700" onclick="_saveScoreInputWithNames(' + ri + ',' + mi + ')">✓ Lưu</button>'
     + '</div>';
+
+  // Focus vào ô tên nếu cần nhập tay
+  if (p1IsPlaceholder) {
+    setTimeout(function(){ var el = document.getElementById('scoreInputP1'); if (el) el.focus(); }, 50);
+  }
+}
+
+function _saveScoreInputWithNames(ri, mi) {
+  // Nếu có ô nhập tên tay → patch vào node trước khi lưu
+  const p1Input = document.getElementById('scoreInputP1');
+  const p2Input = document.getElementById('scoreInputP2');
+  if (p1Input || p2Input) {
+    const newP1 = p1Input ? p1Input.value.trim() : '';
+    const newP2 = p2Input ? p2Input.value.trim() : '';
+    if (!newP1 || !newP2) {
+      alert('Vui lòng nhập tên cả hai VĐV.');
+      return;
+    }
+    // Patch vào knockoutRounds để saveKnockoutResult đọc đúng tên
+    if (S.knockoutRounds[ri] && S.knockoutRounds[ri][mi]) {
+      S.knockoutRounds[ri][mi].p1 = newP1;
+      S.knockoutRounds[ri][mi].p2 = newP2;
+    }
+    // Patch vào schedule
+    const schedRef = (S.schedule || []).find(function(r){ return (r.ri+','+r.mi) === ri+','+mi; });
+    if (schedRef) { schedRef.vdv1 = newP1; schedRef.vdv2 = newP2; }
+  }
+  saveKnockoutResult(ri, mi);
+  const overlay = document.getElementById('scoreInputOverlay');
+  if (overlay) overlay.remove();
 }
 
 function downloadMatchReport(matchKey) {
@@ -5359,36 +5570,46 @@ async function refEndMatch() {
       const pairIdx   = parseInt(parts[2]);
       const key       = groupName + ':' + pairIdx;
 
-      // Merge tdata vào S trước (giống KO)
-      Object.assign(S, tdata);
-      S._tournamentId = asgn.tournament_id;
-      S.rrResults = S.rrResults || {};
-      S.rrResults[key] = {
+      // FIX race condition: merge từ tdata mới nhất, KHÔNG ghi đè toàn bộ S
+      // Chỉ lấy các kết quả từ server rồi merge vào, giữ lại kết quả trận khác
+      const mergedRR = Object.assign({}, tdata.rrResults || {}, S.rrResults || {});
+      mergedRR[key] = {
         s1: totalW1, s2: totalW2, winner,
         w1: totalW1, w2: totalW2,
         sets: REF.sets, shuttle: REF.shuttle,
       };
-    } else if (asgn.match_key === '3rd') {
-      // Trận tranh hạng 3
+      // Cập nhật S với dữ liệu mới nhất từ server, merge kết quả
       Object.assign(S, tdata);
       S._tournamentId = asgn.tournament_id;
-      S.knockoutResults['3rd'] = {
+      S.rrResults = mergedRR;
+    } else if (asgn.match_key === '3rd') {
+      // Trận tranh hạng 3
+      // FIX race condition: merge knockoutResults từ server trước
+      const mergedKO = Object.assign({}, tdata.knockoutResults || {}, S.knockoutResults || {});
+      mergedKO['3rd'] = {
         s1: totalW1, s2: totalW2, winner,
         w1: totalW1, w2: totalW2,
         sets: REF.sets, shuttle: REF.shuttle,
         p1: asgn.vdv1, p2: asgn.vdv2,
       };
+      Object.assign(S, tdata);
+      S._tournamentId = asgn.tournament_id;
+      S.knockoutResults = mergedKO;
     } else {
       // Knockout thường
       const [riStr, miStr] = asgn.match_key.split(',');
       const ri = parseInt(riStr), mi = parseInt(miStr);
-      Object.assign(S, tdata);
-      S._tournamentId = asgn.tournament_id;
-      S.knockoutResults[asgn.match_key] = {
+      // FIX race condition: merge knockoutResults từ server (mới nhất) với kết quả hiện tại của S
+      // Ưu tiên: kết quả của S (đã ghi trước đó) > tdata (cũ hơn) nhưng THÊM trận hiện tại vào
+      const mergedKO = Object.assign({}, tdata.knockoutResults || {}, S.knockoutResults || {});
+      mergedKO[asgn.match_key] = {
         s1: totalW1, s2: totalW2, winner,
         w1: totalW1, w2: totalW2,
         sets: REF.sets, shuttle: REF.shuttle,
       };
+      Object.assign(S, tdata);
+      S._tournamentId = asgn.tournament_id;
+      S.knockoutResults = mergedKO;
       if (winner) advanceKnockoutWinner(ri, mi, winner);
     }
 
