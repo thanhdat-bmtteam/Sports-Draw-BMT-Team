@@ -2940,43 +2940,72 @@ function phase2GetQualified(n) {
 }
 
 function phase2BuildPairs(qualified, mode) {
-  const total = qualified.length;
-  // Làm tròn lên lũy thừa 2 gần nhất
-  let bracketSize = 1;
-  while (bracketSize < total) bracketSize <<= 1;
-
   if (mode === 'cross') {
-    // Chéo bảng: nhất A vs nhì B, nhất B vs nhì A...
+    // Chéo bảng: nhất A vs nhì B, nhất B vs nhì C...
+    // Tách theo rank, shuffle từng nhóm
     const byRank = {};
     qualified.forEach(p => {
       if (!byRank[p.rank]) byRank[p.rank] = [];
       byRank[p.rank].push(p);
     });
-    const firsts = (byRank[0] || []);
-    const seconds = (byRank[1] || []);
-    const others = qualified.filter(p => p.rank >= 2);
+    const firsts  = shuffle([...(byRank[0] || [])]);
+    const seconds = shuffle([...(byRank[1] || [])]);
+    const others  = shuffle(qualified.filter(p => p.rank >= 2));
+
     const pairs = [];
-    // Ghép nhất bảng này với nhì bảng khác
-    for (let i = 0; i < firsts.length; i++) {
-      const opponent = seconds.find(s => s.groupName !== firsts[i].groupName) || seconds[i % seconds.length];
-      if (opponent) pairs.push([firsts[i].name, opponent.name]);
+    const usedNames = new Set();
+
+    // Ghép nhất bảng với nhì bảng khác — đảm bảo mỗi người chỉ xuất hiện 1 lần
+    // Dùng thuật toán matching: xoay vòng seconds để tránh trùng bảng
+    if (firsts.length > 0 && seconds.length > 0) {
+      // Rotate seconds để nhất không gặp nhì cùng bảng
+      let offset = 1;
+      const n = Math.min(firsts.length, seconds.length);
+      // Tìm offset tốt nhất: ít nhất n/2 cặp không cùng bảng
+      for (let o = 1; o < seconds.length; o++) {
+        let clashes = 0;
+        for (let i = 0; i < n; i++) {
+          if (firsts[i].groupName === seconds[(i + o) % seconds.length].groupName) clashes++;
+        }
+        if (clashes === 0) { offset = o; break; }
+        if (clashes < (offset === 1 ? n : 999)) offset = o;
+      }
+      for (let i = 0; i < n; i++) {
+        const f = firsts[i];
+        const s = seconds[(i + offset) % seconds.length];
+        if (!usedNames.has(f.name) && !usedNames.has(s.name)) {
+          pairs.push([f.name, s.name]);
+          usedNames.add(f.name);
+          usedNames.add(s.name);
+        }
+      }
     }
-    // Phần còn lại ghép random
-    const used = new Set(pairs.flatMap(p => p));
-    const remaining = shuffle(qualified.filter(p => !used.has(p.name)).map(p => p.name));
+
+    // Ghép firsts dư (nhiều nhất hơn nhì)
+    firsts.filter(p => !usedNames.has(p.name)).forEach(p => { others.push(p); });
+    seconds.filter(p => !usedNames.has(p.name)).forEach(p => { others.push(p); });
+
+    // Ghép phần còn lại tránh cùng bảng
+    const remaining = shuffle(others.filter(p => !usedNames.has(p.name)));
     for (let i = 0; i < remaining.length - 1; i += 2) {
-      pairs.push([remaining[i], remaining[i+1]]);
+      // Thử tránh cùng bảng
+      let j = i + 1;
+      for (let k = j; k < remaining.length; k++) {
+        if (remaining[k].groupName !== remaining[i].groupName) { j = k; break; }
+      }
+      if (j !== i + 1) [remaining[i+1], remaining[j]] = [remaining[j], remaining[i+1]];
+      pairs.push([remaining[i].name, remaining[i+1].name]);
+      usedNames.add(remaining[i].name);
+      usedNames.add(remaining[i+1].name);
     }
     return pairs;
   }
 
   if (mode === 'controlled') {
-    // Random nhưng nhất không gặp nhất, cùng bảng không gặp nhau
     return phase2ControlledDraw(qualified);
   }
 
   if (mode === 'random') {
-    // Hoàn toàn ngẫu nhiên
     const names = shuffle(qualified.map(p => p.name));
     const pairs = [];
     for (let i = 0; i < names.length - 1; i += 2) pairs.push([names[i], names[i+1]]);
@@ -2984,7 +3013,7 @@ function phase2BuildPairs(qualified, mode) {
   }
 
   if (mode === 'ranked') {
-    // Xếp hạng tổng: #1 gặp #cuối, #2 gặp áp chót
+    // Xếp hạng tổng: ghép theo điểm/hiệu số chung
     const sorted = [...qualified].sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (b.p !== a.p) return b.p - a.p;
@@ -3001,32 +3030,47 @@ function phase2BuildPairs(qualified, mode) {
 }
 
 function phase2ControlledDraw(qualified) {
-  // Tách nhất bảng và phần còn lại
-  const firsts = shuffle(qualified.filter(p => p.rank === 0));
-  const others = shuffle(qualified.filter(p => p.rank > 0));
+  // Random nhưng nhất không gặp nhất, cùng bảng không gặp nhau vòng 1
+  const usedNames = new Set();
   const pairs = [];
-  const usedGroups = new Set();
+  const firsts  = shuffle(qualified.filter(p => p.rank === 0));
+  const nonFirsts = shuffle(qualified.filter(p => p.rank > 0));
 
-  // Mỗi nhất bảng ghép với một người từ bảng khác
+  // Ghép mỗi nhất bảng với người không cùng bảng và không phải nhất bảng khác
   firsts.forEach(f => {
-    const candidate = others.find(o => o.groupName !== f.groupName && !pairs.some(p => p.includes(o.name)));
+    if (usedNames.has(f.name)) return;
+    // Ưu tiên: không cùng bảng, không phải nhất bảng khác
+    let candidate = nonFirsts.find(o =>
+      !usedNames.has(o.name) && o.groupName !== f.groupName
+    );
+    // Fallback: không cùng bảng (có thể là nhất bảng khác)
+    if (!candidate) {
+      candidate = qualified.find(o =>
+        !usedNames.has(o.name) && o.name !== f.name && o.groupName !== f.groupName
+      );
+    }
+    // Last resort: bất kỳ ai chưa ghép
+    if (!candidate) {
+      candidate = qualified.find(o => !usedNames.has(o.name) && o.name !== f.name);
+    }
     if (candidate) {
       pairs.push([f.name, candidate.name]);
+      usedNames.add(f.name);
+      usedNames.add(candidate.name);
     }
   });
 
-  // Phần còn lại ghép random tránh cùng bảng
-  const used = new Set(pairs.flatMap(p => p));
-  const remaining = qualified.filter(p => !used.has(p.name));
-  const shuffled = shuffle(remaining);
-  for (let i = 0; i < shuffled.length - 1; i += 2) {
-    // Thử tránh cùng bảng
+  // Ghép phần còn lại tránh cùng bảng
+  const remaining = shuffle(qualified.filter(p => !usedNames.has(p.name)));
+  for (let i = 0; i < remaining.length - 1; i += 2) {
     let j = i + 1;
-    for (let k = j; k < shuffled.length; k++) {
-      if (shuffled[k].groupName !== shuffled[i].groupName) { j = k; break; }
+    for (let k = j; k < remaining.length; k++) {
+      if (remaining[k].groupName !== remaining[i].groupName) { j = k; break; }
     }
-    [shuffled[i+1], shuffled[j]] = [shuffled[j], shuffled[i+1]];
-    pairs.push([shuffled[i].name, shuffled[i+1].name]);
+    if (j !== i + 1) [remaining[i+1], remaining[j]] = [remaining[j], remaining[i+1]];
+    pairs.push([remaining[i].name, remaining[i+1].name]);
+    usedNames.add(remaining[i].name);
+    usedNames.add(remaining[i+1].name);
   }
   return pairs;
 }
