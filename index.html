@@ -2500,16 +2500,19 @@ function buildSetInputRows(type, id, maxSets) {
 
 function buildSetInputRowsPrefilled(type, id, sets, maxSets) {
   let html = '';
-  const n = maxSets || (sets ? Math.max(sets.length, 1) : 3);
+  // Sanitize id: remove spaces and special chars that break HTML id attribute
+  const safeId = String(id).replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const n = maxSets || (sets ? Math.max(sets.filter(Boolean).length, 1) : 3);
   for (let i = 1; i <= n; i++) {
     const s = sets && sets[i-1];
-    const v1 = s !== undefined ? s.s1 : '';
-    const v2 = s !== undefined ? s.s2 : '';
+    // Guard: s could be null/undefined (sparse array or bad data)
+    const v1 = (s != null) ? s.s1 : '';
+    const v2 = (s != null) ? s.s2 : '';
     html += `<div class="set-row">
       <span class="set-label">S${i}</span>
-      <input class="score-inp-sm" type="number" min="0" id="${type}s1_${id}_${i}" placeholder="–" value="${v1}"/>
+      <input class="score-inp-sm" type="number" min="0" id="${type}s1_${safeId}_${i}" placeholder="–" value="${v1}"/>
       <span class="score-dash">–</span>
-      <input class="score-inp-sm" type="number" min="0" id="${type}s2_${id}_${i}" placeholder="–" value="${v2}"/>
+      <input class="score-inp-sm" type="number" min="0" id="${type}s2_${safeId}_${i}" placeholder="–" value="${v2}"/>
     </div>`;
   }
   return html;
@@ -2517,9 +2520,10 @@ function buildSetInputRowsPrefilled(type, id, sets, maxSets) {
 
 function collectSets(type, id) {
   const sets = [];
+  const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
   for (let i = 1; i <= 3; i++) {
-    const v1 = document.getElementById(`${type}s1_${id}_${i}`)?.value.trim();
-    const v2 = document.getElementById(`${type}s2_${id}_${i}`)?.value.trim();
+    const v1 = document.getElementById(`${type}s1_${safeId}_${i}`)?.value.trim();
+    const v2 = document.getElementById(`${type}s2_${safeId}_${i}`)?.value.trim();
     if (v1 === '' && v2 === '') continue;
     const s1 = parseInt(v1), s2 = parseInt(v2);
     if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) return null;
@@ -5430,8 +5434,8 @@ function openRRScoreInput(rawGName, pairIdx) {
 function saveRRResultFromPopup(safeGName, pairIdx, gName) {
   if (!gName) {
     gName = Object.keys(S.pairsByGroup || {}).find(function(k) {
-      return k.replace(/[^a-zA-Z0-9]/g,'_') === safeGName;
-    }) || safeGName.replace(/_/g,' ');
+      return k === safeGName || k.replace(/[^a-zA-Z0-9]/g,'_') === safeGName || safeGName.replace(/[^a-zA-Z0-9]/g,'_') === k.replace(/[^a-zA-Z0-9]/g,'_');
+    }) || safeGName;
   }
   const id = safeGName + '_' + pairIdx;
   const sets = collectSets('rr', id);
