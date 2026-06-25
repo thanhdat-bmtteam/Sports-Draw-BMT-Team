@@ -2816,15 +2816,49 @@ function openPhase2Modal() {
     </div>
     ${previewHtml}
     <div>
-      <div class="field-label" style="margin-bottom:6px">Lấy bao nhiêu VĐV/bảng vào Knockout</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap" id="phase2TopNBtns">
-        ${[1,2,3].filter(n => n <= maxPerGroup).map(n =>
-          '<button class="btn btn-secondary phase2-topn-btn" data-n="'+n+'" style="width:auto;padding:6px 14px;font-family:Barlow Condensed,sans-serif;font-weight:700" onclick="phase2SelectN('+n+')">Top '+n+'</button>'
-        ).join('')}
-        <button class="btn btn-secondary phase2-topn-btn" data-n="custom" style="width:auto;padding:6px 14px;font-family:Barlow Condensed,sans-serif;font-weight:700" onclick="phase2SelectN('custom')">Tùy chỉnh</button>
-      </div>
-      <div id="phase2CustomNWrap" style="display:none;margin-top:8px">
-        <input type="number" id="phase2CustomN" min="1" max="${maxPerGroup}" placeholder="Nhập số VĐV/bảng" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;width:100%;font-size:13px"/>
+      <div class="field-label" style="margin-bottom:8px">Cách chọn VĐV vào Knockout</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="phase2QualifyBtns">
+
+        <button class="btn btn-secondary phase2-qualify-btn" data-mode="custom_per_group"
+          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('custom_per_group')">
+          <div style="font-weight:700;font-size:12px">🔢 Chọn X VĐV đứng đầu mỗi bảng</div>
+          <div style="font-size:11px;color:var(--muted)">Ví dụ: top 2 mỗi bảng, top 3 mỗi bảng...</div>
+        </button>
+        <div id="phase2CustomPerGroupWrap" style="display:none;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
+          <label style="font-size:11px;color:var(--muted)">Số VĐV lấy từ mỗi bảng:</label>
+          <input type="number" id="phase2CustomPerGroup" min="1" max="${maxPerGroup}" value="2"
+            oninput="phase2UpdatePreview()"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;width:70px;font-size:13px;margin-left:8px"/>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px">/ ${numGroups} bảng = <span id="phase2CustomPerGroupTotal">?</span> VĐV</span>
+        </div>
+
+        <button class="btn btn-secondary phase2-qualify-btn" data-mode="firsts_only"
+          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('firsts_only')">
+          <div style="font-weight:700;font-size:12px">🥇 Chỉ nhất mỗi bảng</div>
+          <div style="font-size:11px;color:var(--muted)">${numGroups} VĐV (1 người/bảng)</div>
+        </button>
+
+        <button class="btn btn-secondary phase2-qualify-btn" data-mode="firsts_and_seconds"
+          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('firsts_and_seconds')">
+          <div style="font-weight:700;font-size:12px">🥇🥈 Nhất và nhì mỗi bảng</div>
+          <div style="font-size:11px;color:var(--muted)">${numGroups * 2} VĐV (2 người/bảng)</div>
+        </button>
+
+        <button class="btn btn-secondary phase2-qualify-btn" data-mode="best_thirds"
+          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('best_thirds')">
+          <div style="font-weight:700;font-size:12px">🥇🥈 + 🥉 Hạng ba tốt nhất bù suất</div>
+          <div style="font-size:11px;color:var(--muted)">Nhất + nhì mỗi bảng, lấy thêm hạng ba để đủ bracket</div>
+        </button>
+        <div id="phase2BestThirdsWrap" style="display:none;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
+          <label style="font-size:11px;color:var(--muted)">Tổng VĐV mong muốn (phải là lũy thừa 2):</label>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" id="phase2BracketSizeBtns">
+            ${[4,8,16,32].filter(s => s >= numGroups*2).map(s =>
+              '<button class="btn btn-secondary phase2-bracket-size-btn" data-size="'+s+'" style="width:auto;padding:4px 12px;font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:12px" onclick="phase2SelectBracketSize('+s+')">'+s+'</button>'
+            ).join('')}
+          </div>
+          <div id="phase2BestThirdsInfo" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+        </div>
+
       </div>
     </div>
     <div>
@@ -2861,18 +2895,46 @@ function openPhase2Modal() {
   window._phase2Config = { n: null, pairMode: null, standings };
 }
 
-let _phase2SelectedN = null;
-let _phase2SelectedMode = null;
+let _phase2SelectedQMode = null; // 'custom_per_group'|'firsts_only'|'firsts_and_seconds'|'best_thirds'
+let _phase2SelectedMode = null;  // pair mode
+let _phase2BracketSize = null;   // for best_thirds
 
-function phase2SelectN(n) {
-  _phase2SelectedN = n;
-  document.querySelectorAll('.phase2-topn-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.n == String(n));
-    b.style.background = b.dataset.n == String(n) ? 'var(--accent)' : '';
-    b.style.color = b.dataset.n == String(n) ? '#000' : '';
+function phase2SelectQualify(qmode) {
+  _phase2SelectedQMode = qmode;
+  document.querySelectorAll('.phase2-qualify-btn').forEach(b => {
+    const active = b.dataset.mode === qmode;
+    b.style.borderColor = active ? 'var(--accent)' : '';
+    b.style.background = active ? 'rgba(232,160,32,.12)' : '';
   });
-  const wrap = document.getElementById('phase2CustomNWrap');
-  if (wrap) wrap.style.display = n === 'custom' ? 'block' : 'none';
+  // Hiện/ẩn sub-option
+  const cpg = document.getElementById('phase2CustomPerGroupWrap');
+  const bt  = document.getElementById('phase2BestThirdsWrap');
+  if (cpg) cpg.style.display = qmode === 'custom_per_group' ? 'block' : 'none';
+  if (bt)  bt.style.display  = qmode === 'best_thirds'      ? 'block' : 'none';
+  if (qmode !== 'best_thirds') _phase2BracketSize = null;
+  phase2UpdatePreview();
+}
+
+function phase2SelectBracketSize(size) {
+  _phase2BracketSize = size;
+  document.querySelectorAll('.phase2-bracket-size-btn').forEach(b => {
+    const active = parseInt(b.dataset.size) === size;
+    b.style.background = active ? 'var(--accent)' : '';
+    b.style.color = active ? '#000' : '';
+  });
+  // Cập nhật info: nhất+nhì = numGroups*2, cần thêm bao nhiêu hạng ba
+  const base = (S.groups || []).length * 2;
+  const need = size - base;
+  const infoEl = document.getElementById('phase2BestThirdsInfo');
+  if (infoEl) {
+    if (need <= 0) {
+      infoEl.textContent = '⚠️ Bracket ' + size + ' không cần thêm hạng ba (nhất+nhì đã = ' + base + ')';
+      infoEl.style.color = '#f97316';
+    } else {
+      infoEl.textContent = '→ Nhất+nhì: ' + base + ' VĐV + ' + need + ' hạng ba tốt nhất = ' + size + ' VĐV tổng';
+      infoEl.style.color = 'var(--muted)';
+    }
+  }
   phase2UpdatePreview();
 }
 
@@ -2895,14 +2957,26 @@ function phase2GetN() {
 }
 
 function phase2UpdatePreview() {
-  const n = phase2GetN();
-  const mode = _phase2SelectedMode;
-  const confirmBtn = document.getElementById('phase2ConfirmBtn');
-  const previewDiv = document.getElementById('phase2Preview');
+  const qmode = _phase2SelectedQMode;
+  const mode  = _phase2SelectedMode;
+  const confirmBtn  = document.getElementById('phase2ConfirmBtn');
+  const previewDiv  = document.getElementById('phase2Preview');
   const previewList = document.getElementById('phase2PreviewList');
   if (!confirmBtn || !previewDiv || !previewList) return;
 
-  if (!n || !mode) {
+  // Cập nhật total label cho custom_per_group
+  if (qmode === 'custom_per_group') {
+    const v = parseInt(document.getElementById('phase2CustomPerGroup')?.value) || 0;
+    const el = document.getElementById('phase2CustomPerGroupTotal');
+    if (el) el.textContent = v * (S.groups || []).length;
+  }
+
+  // Validate đủ điều kiện chưa
+  const ready = qmode && mode
+    && (qmode !== 'custom_per_group' || (parseInt(document.getElementById('phase2CustomPerGroup')?.value) >= 1))
+    && (qmode !== 'best_thirds' || _phase2BracketSize);
+
+  if (!ready) {
     confirmBtn.disabled = true;
     confirmBtn.style.opacity = '.4';
     confirmBtn.style.cursor = 'not-allowed';
@@ -2910,21 +2984,34 @@ function phase2UpdatePreview() {
     return;
   }
 
-  // Lấy danh sách VĐV
-  const qualified = phase2GetQualified(n);
+  const qualified = phase2GetQualified();
+  if (!qualified.length) { previewDiv.style.display = 'none'; return; }
+
   const paired = phase2BuildPairs(qualified, mode);
 
   previewDiv.style.display = 'block';
-  let html = '<table style="width:100%;border-collapse:collapse">';
-  html += '<tr><th style="text-align:left;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 1</th><th style="text-align:center;padding:3px 6px;color:var(--muted);font-size:10px">vs</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 2</th></tr>';
-  paired.forEach((pair, i) => {
+  let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Tổng <strong style="color:var(--text)">' + qualified.length + '</strong> VĐV → <strong style="color:var(--text)">' + paired.length + '</strong> cặp đấu</div>';
+  html += '<table style="width:100%;border-collapse:collapse">';
+  html += '<tr><th style="text-align:left;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 1</th><th style="padding:3px 6px;color:var(--muted);font-size:10px;text-align:center">Từ</th><th style="text-align:center;padding:3px 6px;color:var(--muted);font-size:10px">vs</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:10px">VĐV 2</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:10px">Từ</th></tr>';
+  paired.forEach(pair => {
+    const q1 = qualified.find(q => q.name === pair[0]);
+    const q2 = qualified.find(q => q.name === pair[1]);
+    const tag1 = q1 ? '<span style="font-size:9px;color:var(--muted)">'+q1.groupName+'</span>' : '';
+    const tag2 = q2 ? '<span style="font-size:9px;color:var(--muted)">'+q2.groupName+'</span>' : '';
+    const is3rd1 = q1 && q1.rank === 2;
+    const is3rd2 = q2 && q2.rank === 2;
     html += '<tr style="border-top:1px solid rgba(255,255,255,.05)">'
-      + '<td style="padding:3px 6px;font-size:11px">' + pair[0] + '</td>'
+      + '<td style="padding:3px 6px;font-size:11px' + (is3rd1 ? ';color:#f97316' : '') + '">' + pair[0] + '</td>'
+      + '<td style="padding:3px 6px;text-align:center">' + tag1 + '</td>'
       + '<td style="text-align:center;color:var(--muted);font-size:10px">vs</td>'
-      + '<td style="text-align:right;padding:3px 6px;font-size:11px">' + pair[1] + '</td>'
+      + '<td style="text-align:right;padding:3px 6px;font-size:11px' + (is3rd2 ? ';color:#f97316' : '') + '">' + pair[1] + '</td>'
+      + '<td style="padding:3px 6px;text-align:right">' + tag2 + '</td>'
       + '</tr>';
   });
   html += '</table>';
+  if (qualified.some(q => q.rank === 2)) {
+    html += '<div style="font-size:10px;color:#f97316;margin-top:6px">🥉 Màu cam = hạng ba được chọn</div>';
+  }
   previewList.innerHTML = html;
 
   confirmBtn.disabled = false;
@@ -2932,16 +3019,68 @@ function phase2UpdatePreview() {
   confirmBtn.style.cursor = 'pointer';
 }
 
-function phase2GetQualified(n) {
-  // Trả về mảng [{name, groupName, rank, points, diff, scored}]
+function phase2GetQualified() {
+  const qmode = _phase2SelectedQMode;
   const result = [];
-  S.groups.forEach((players, gi) => {
-    const gName = 'Bảng ' + String.fromCharCode(65 + gi);
-    const st = calcRRStandings(gName, players);
-    st.slice(0, n).forEach((p, rank) => {
-      result.push({ name: p.name, groupName: gName, rank, p: p.p, diff: p.diff, scored: p.scored });
+
+  if (qmode === 'firsts_only') {
+    S.groups.forEach((players, gi) => {
+      const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+      const st = calcRRStandings(gName, players);
+      if (st[0]) result.push({ name: st[0].name, groupName: gName, rank: 0, p: st[0].p, diff: st[0].diff, scored: st[0].scored });
     });
-  });
+  }
+
+  else if (qmode === 'firsts_and_seconds') {
+    S.groups.forEach((players, gi) => {
+      const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+      const st = calcRRStandings(gName, players);
+      st.slice(0, 2).forEach((p, rank) => {
+        result.push({ name: p.name, groupName: gName, rank, p: p.p, diff: p.diff, scored: p.scored });
+      });
+    });
+  }
+
+  else if (qmode === 'custom_per_group') {
+    const n = parseInt(document.getElementById('phase2CustomPerGroup')?.value) || 0;
+    if (n < 1) return [];
+    S.groups.forEach((players, gi) => {
+      const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+      const st = calcRRStandings(gName, players);
+      st.slice(0, n).forEach((p, rank) => {
+        result.push({ name: p.name, groupName: gName, rank, p: p.p, diff: p.diff, scored: p.scored });
+      });
+    });
+  }
+
+  else if (qmode === 'best_thirds') {
+    const targetSize = _phase2BracketSize;
+    if (!targetSize) return [];
+    // Lấy nhất + nhì mỗi bảng
+    const thirds = [];
+    S.groups.forEach((players, gi) => {
+      const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+      const st = calcRRStandings(gName, players);
+      // Nhất + nhì
+      st.slice(0, 2).forEach((p, rank) => {
+        result.push({ name: p.name, groupName: gName, rank, p: p.p, diff: p.diff, scored: p.scored });
+      });
+      // Hạng ba (nếu có)
+      if (st[2]) thirds.push({ name: st[2].name, groupName: gName, rank: 2, p: st[2].p, diff: st[2].diff, scored: st[2].scored });
+    });
+    // Cần thêm bao nhiêu hạng ba?
+    const need = targetSize - result.length;
+    if (need > 0 && thirds.length > 0) {
+      // Xếp hạng ba theo: điểm → hiệu số → tổng điểm ghi
+      thirds.sort((a, b) => {
+        if (b.p !== a.p) return b.p - a.p;
+        if (b.diff !== a.diff) return b.diff - a.diff;
+        return b.scored - a.scored;
+      });
+      thirds.slice(0, need).forEach(p => result.push(p));
+    }
+  }
+
   return result;
 }
 
@@ -3082,15 +3221,15 @@ function phase2ControlledDraw(qualified) {
 }
 
 async function confirmPhase2() {
-  const n = phase2GetN();
   const mode = _phase2SelectedMode;
-  if (!n || !mode) return;
+  if (!_phase2SelectedQMode || !mode) return;
 
-  const qualified = phase2GetQualified(n);
+  const qualified = phase2GetQualified();
   const pairs = phase2BuildPairs(qualified, mode);
 
   if (!pairs.length) { alert('Không đủ VĐV để tạo bracket.'); return; }
 
+  if (!qualified.length) { alert('Không có VĐV nào được chọn.'); return; }
   if (!confirm('Chuyển sang Knockout với ' + qualified.length + ' VĐV?\n\nDữ liệu vòng bảng sẽ được giữ nguyên.')) return;
 
   // Lưu lại toàn bộ dữ liệu RR vào phase1RRData
@@ -3158,8 +3297,9 @@ async function confirmPhase2() {
   }
 
   document.getElementById('phase2Modal').remove();
-  _phase2SelectedN = null;
+  _phase2SelectedQMode = null;
   _phase2SelectedMode = null;
+  _phase2BracketSize = null;
   renderContent();
 
   alert('✅ Đã chuyển sang Knockout với ' + qualified.length + ' VĐV!\nBắt đầu xếp lịch và thi đấu.');
