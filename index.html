@@ -2820,43 +2820,57 @@ function openPhase2Modal() {
       <div style="display:flex;flex-direction:column;gap:6px" id="phase2QualifyBtns">
 
         <button class="btn btn-secondary phase2-qualify-btn" data-mode="custom_per_group"
-          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('custom_per_group')">
-          <div style="font-weight:700;font-size:12px">🔢 Chọn X VĐV đứng đầu mỗi bảng</div>
-          <div style="font-size:11px;color:var(--muted)">Ví dụ: top 2 mỗi bảng, top 3 mỗi bảng...</div>
+          style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start" onclick="phase2SelectQualify('custom_per_group')">
+          <span style="font-size:16px;flex-shrink:0">🔢</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Chọn X VĐV đứng đầu mỗi bảng</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">Ví dụ: top 2 mỗi bảng, top 3 mỗi bảng...</div>
+          </div>
         </button>
-        <div id="phase2CustomPerGroupWrap" style="display:none;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
-          <label style="font-size:11px;color:var(--muted)">Số VĐV lấy từ mỗi bảng:</label>
-          <input type="number" id="phase2CustomPerGroup" min="1" max="${maxPerGroup}" value="2"
-            oninput="phase2UpdatePreview()"
-            style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;width:70px;font-size:13px;margin-left:8px"/>
-          <span style="font-size:11px;color:var(--muted);margin-left:6px">/ ${numGroups} bảng = <span id="phase2CustomPerGroupTotal">?</span> VĐV</span>
+        <div id="phase2CustomPerGroupWrap" style="display:none;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--muted)">Số VĐV mỗi bảng:</span>
+            <input type="number" id="phase2CustomPerGroup" min="1" max="${maxPerGroup}" value="2"
+              oninput="phase2UpdatePreview()"
+              style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;width:60px;font-size:13px;text-align:center"/>
+            <span style="font-size:12px;color:var(--muted)">× ${numGroups} bảng = <strong id="phase2CustomPerGroupTotal" style="color:var(--text)">?</strong> VĐV</span>
+          </div>
         </div>
 
         <button class="btn btn-secondary phase2-qualify-btn" data-mode="firsts_only"
-          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('firsts_only')">
-          <div style="font-weight:700;font-size:12px">🥇 Chỉ nhất mỗi bảng</div>
-          <div style="font-size:11px;color:var(--muted)">${numGroups} VĐV (1 người/bảng)</div>
+          style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start" onclick="phase2SelectQualify('firsts_only')">
+          <span style="font-size:16px;flex-shrink:0">🥇</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Chỉ nhất mỗi bảng</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">${numGroups} VĐV — 1 người/bảng</div>
+          </div>
         </button>
 
         <button class="btn btn-secondary phase2-qualify-btn" data-mode="firsts_and_seconds"
-          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('firsts_and_seconds')">
-          <div style="font-weight:700;font-size:12px">🥇🥈 Nhất và nhì mỗi bảng</div>
-          <div style="font-size:11px;color:var(--muted)">${numGroups * 2} VĐV (2 người/bảng)</div>
+          style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start" onclick="phase2SelectQualify('firsts_and_seconds')">
+          <span style="font-size:16px;flex-shrink:0">🥇🥈</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Nhất và nhì mỗi bảng</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">${numGroups * 2} VĐV — 2 người/bảng</div>
+          </div>
         </button>
 
         <button class="btn btn-secondary phase2-qualify-btn" data-mode="best_thirds"
-          style="text-align:left;padding:8px 12px" onclick="phase2SelectQualify('best_thirds')">
-          <div style="font-weight:700;font-size:12px">🥇🥈 + 🥉 Hạng ba tốt nhất bù suất</div>
-          <div style="font-size:11px;color:var(--muted)">Nhất + nhì mỗi bảng, lấy thêm hạng ba để đủ bracket</div>
+          style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start" onclick="phase2SelectQualify('best_thirds')">
+          <span style="font-size:16px;flex-shrink:0">🥉</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Nhất + nhì + hạng ba tốt nhất bù suất</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">Lấy thêm hạng ba để đủ số bracket mong muốn</div>
+          </div>
         </button>
-        <div id="phase2BestThirdsWrap" style="display:none;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
-          <label style="font-size:11px;color:var(--muted)">Tổng VĐV mong muốn (phải là lũy thừa 2):</label>
-          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" id="phase2BracketSizeBtns">
+        <div id="phase2BestThirdsWrap" style="display:none;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-top:-4px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tổng VĐV vào bracket:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="phase2BracketSizeBtns">
             ${[4,8,16,32].filter(s => s >= numGroups*2).map(s =>
-              '<button class="btn btn-secondary phase2-bracket-size-btn" data-size="'+s+'" style="width:auto;padding:4px 12px;font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:12px" onclick="phase2SelectBracketSize('+s+')">'+s+'</button>'
+              '<button class="btn btn-secondary phase2-bracket-size-btn" data-size="'+s+'" style="width:auto;padding:6px 16px;font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:14px" onclick="phase2SelectBracketSize('+s+')">'+s+'</button>'
             ).join('')}
           </div>
-          <div id="phase2BestThirdsInfo" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+          <div id="phase2BestThirdsInfo" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
         </div>
 
       </div>
@@ -2864,27 +2878,48 @@ function openPhase2Modal() {
     <div>
       <div class="field-label" style="margin-bottom:6px">Kiểu bắt cặp vào Knockout</div>
       <div style="display:flex;flex-direction:column;gap:6px" id="phase2PairModeBtns">
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="cross" onclick="phase2SelectPair('cross')" style="text-align:left;padding:8px 12px">
-          <div style="font-weight:700;font-size:12px">🔀 Chéo bảng</div>
-          <div style="font-size:11px;color:var(--muted)">Nhất A gặp Nhì B, Nhất B gặp Nhì A...</div>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="cross" onclick="phase2SelectPair('cross')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;flex-shrink:0">🔀</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Chéo bảng</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">Nhất A gặp Nhì B, Nhất B gặp Nhì A...</div>
+          </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="controlled" onclick="phase2SelectPair('controlled')" style="text-align:left;padding:8px 12px">
-          <div style="font-weight:700;font-size:12px">🎲 Bốc thăm có kiểm soát</div>
-          <div style="font-size:11px;color:var(--muted)">Random nhưng nhất không gặp nhất, cùng bảng không gặp nhau vòng 1</div>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="controlled" onclick="phase2SelectPair('controlled')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;flex-shrink:0">🎲</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Bốc thăm có kiểm soát</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">Nhất không gặp nhất, cùng bảng không gặp nhau vòng 1</div>
+          </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="random" onclick="phase2SelectPair('random')" style="text-align:left;padding:8px 12px">
-          <div style="font-weight:700;font-size:12px">🎰 Bốc thăm hoàn toàn ngẫu nhiên</div>
-          <div style="font-size:11px;color:var(--muted)">Không có ràng buộc gì</div>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="random" onclick="phase2SelectPair('random')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;flex-shrink:0">🎰</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Bốc thăm hoàn toàn ngẫu nhiên</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">Không có ràng buộc gì</div>
+          </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="ranked" onclick="phase2SelectPair('ranked')" style="text-align:left;padding:8px 12px">
-          <div style="font-weight:700;font-size:12px">📊 Theo thứ hạng tổng</div>
-          <div style="font-size:11px;color:var(--muted)">Xếp hạng chung tất cả bảng: #1 gặp #cuối, #2 gặp #áp chót...</div>
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="ranked" onclick="phase2SelectPair('ranked')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;flex-shrink:0">📊</span>
+          <div>
+            <div style="font-weight:700;font-size:12px">Theo thứ hạng tổng</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:400">#1 gặp #cuối, #2 gặp #áp chót...</div>
+          </div>
         </button>
       </div>
     </div>
     <div id="phase2Preview" style="display:none">
       <div class="field-label" style="margin-bottom:6px">Danh sách VĐV vào Knockout</div>
       <div id="phase2PreviewList" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="phase2Show3rd" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"/>
+        <div>
+          <div style="font-size:12px;font-weight:700">🥉 Có trận tranh hạng ba</div>
+          <div style="font-size:11px;color:var(--muted)">2 VĐV thua bán kết sẽ đấu thêm 1 trận</div>
+        </div>
+      </label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="document.getElementById('phase2Modal').remove()">Hủy</button>
@@ -3278,7 +3313,7 @@ async function confirmPhase2() {
 
   S.knockoutSlots = slots;
   S.mode = 'knockout';
-  S.show3rdPlace = false;
+  S.show3rdPlace = !!(document.getElementById('phase2Show3rd')?.checked);
 
   rebuildKnockoutTree();
 
@@ -3306,19 +3341,8 @@ async function confirmPhase2() {
 }
 
 function openPhase1View() {
-  // Quay lại xem kết quả vòng bảng (read-only)
   if (!S.phase1RRData) { alert('Không có dữ liệu vòng bảng.'); return; }
   const d = S.phase1RRData;
-  // Tạm thời swap state để renderRRView
-  const saved = {
-    mode: S.mode, groups: S.groups, pairsByGroup: S.pairsByGroup,
-    rrResults: S.rrResults, schedule: S.schedule, scheduleType: S.scheduleType,
-    showRRSchedule: S.showRRSchedule
-  };
-  S.mode = 'roundrobin';
-  S.groups = d.groups; S.pairsByGroup = d.pairsByGroup;
-  S.rrResults = d.rrResults; S.schedule = d.schedule;
-  S.scheduleType = d.scheduleType; S.showRRSchedule = d.showRRSchedule;
 
   const overlay = document.createElement('div');
   overlay.id = 'phase1ViewOverlay';
@@ -3334,23 +3358,48 @@ function openPhase1View() {
   closeBtn2.onclick = function() {
     var el = document.getElementById('phase1ViewOverlay');
     if (el) el.remove();
-    if (window._phase1SavedState) { Object.assign(S, window._phase1SavedState); delete window._phase1SavedState; }
-    renderContent();
   };
   header.appendChild(closeBtn2);
   overlay.appendChild(header);
 
-  window._phase1SavedState = saved;
   const container = document.createElement('div');
   overlay.appendChild(container);
   document.body.appendChild(overlay);
 
+  // Render RR với data phase1 — swap state, render, restore TOÀN BỘ sau khi async xong
+  const savedState = {
+    mode: S.mode, groups: S.groups, pairsByGroup: S.pairsByGroup,
+    rrResults: S.rrResults, schedule: S.schedule, scheduleType: S.scheduleType,
+    showRRSchedule: S.showRRSchedule
+  };
+
+  // Patch S tạm thời
+  S.mode = 'roundrobin';
+  S.groups = d.groups;
+  S.pairsByGroup = d.pairsByGroup;
+  S.rrResults = d.rrResults;
+  S.schedule = d.schedule;
+  S.scheduleType = d.scheduleType;
+  S.showRRSchedule = d.showRRSchedule;
+
+  // renderRRView sync (groups), các tab async load khi click
+  // Quan trọng: KHÔNG restore state ngay — chỉ restore khi đóng overlay
   renderRRView(container);
 
-  // Restore state sau khi render
-  S.mode = saved.mode; S.groups = saved.groups; S.pairsByGroup = saved.pairsByGroup;
-  S.rrResults = saved.rrResults; S.schedule = saved.schedule;
-  S.scheduleType = saved.scheduleType; S.showRRSchedule = saved.showRRSchedule;
+  // Khi đóng overlay mới restore state KO
+  // Override closeBtn2.onclick để restore đúng
+  closeBtn2.onclick = function() {
+    var el = document.getElementById('phase1ViewOverlay');
+    if (el) el.remove();
+    // Restore KO state
+    S.mode = savedState.mode;
+    S.groups = savedState.groups;
+    S.pairsByGroup = savedState.pairsByGroup;
+    S.rrResults = savedState.rrResults;
+    S.schedule = savedState.schedule;
+    S.scheduleType = savedState.scheduleType;
+    S.showRRSchedule = savedState.showRRSchedule;
+  };
 }
 
 /* ════════════════════════════════════════
@@ -3925,7 +3974,13 @@ async function renderKOMatchesTable(container) {
   html += '</tbody></table>';
 
   // ── Trận Chung kết ──
-  const finalMatch = (S.schedule || []).find(r => r.roundName === 'Chung kết');
+  // Fallback từ knockoutRounds khi chưa có lịch (phase 2)
+  const finalMatchSched = (S.schedule || []).find(r => r.roundName === 'Chung kết');
+  const finalRoundIdx = S.knockoutRounds.length - 1;
+  const finalMatchFallback = (finalRoundIdx >= 0 && S.knockoutRounds[finalRoundIdx] && S.knockoutRounds[finalRoundIdx][0])
+    ? { ri: finalRoundIdx, mi: 0, matchNo: S.knockoutRounds.flat().length, san: '–', time: null, vdv1: S.knockoutRounds[finalRoundIdx][0].p1, vdv2: S.knockoutRounds[finalRoundIdx][0].p2 }
+    : null;
+  const finalMatch = finalMatchSched || finalMatchFallback;
   if (finalMatch) {
     const { ri, mi, matchNo, san } = finalMatch;
     const node = S.knockoutRounds[ri] ? S.knockoutRounds[ri][mi] : null;
@@ -3998,7 +4053,7 @@ async function renderKOMatchesTable(container) {
   // ── Trận tranh hạng 3 (thua bán kết) ──
   const rounds = S.knockoutRounds;
   const totalRounds = rounds.length;
-  if (totalRounds >= 2 && S.show3rdPlace !== false) {
+  if (totalRounds >= 2 && S.show3rdPlace === true) {
     // Bán kết = vòng totalRounds-2 (index từ 0), với 4 VĐV thì totalRounds=2 → index 0
     const sfRound = rounds[totalRounds - 2];
     if (sfRound && sfRound.length >= 2) {
