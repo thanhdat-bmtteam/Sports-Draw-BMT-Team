@@ -259,6 +259,13 @@
   }
   .btn-reset:hover { background: rgba(239,68,68,.25); }
 
+  /* Phase 2 modal buttons - luôn căn trái */
+  .phase2-qualify-btn,
+  .phase2-pair-btn {
+    justify-content: flex-start !important;
+    text-align: left !important;
+  }
+
   /* Winner highlight */
   .winner-name {
     color: var(--green) !important;
@@ -2878,28 +2885,28 @@ function openPhase2Modal() {
     <div>
       <div class="field-label" style="margin-bottom:6px">Kiểu bắt cặp vào Knockout</div>
       <div style="display:flex;flex-direction:column;gap:6px" id="phase2PairModeBtns">
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="cross" onclick="phase2SelectPair('cross')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="cross" onclick="phase2SelectPair('cross')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start">
           <span style="font-size:16px;flex-shrink:0">🔀</span>
           <div>
             <div style="font-weight:700;font-size:12px">Chéo bảng</div>
             <div style="font-size:11px;color:var(--muted);font-weight:400">Nhất A gặp Nhì B, Nhất B gặp Nhì A...</div>
           </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="controlled" onclick="phase2SelectPair('controlled')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="controlled" onclick="phase2SelectPair('controlled')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start">
           <span style="font-size:16px;flex-shrink:0">🎲</span>
           <div>
             <div style="font-weight:700;font-size:12px">Bốc thăm có kiểm soát</div>
             <div style="font-size:11px;color:var(--muted);font-weight:400">Nhất không gặp nhất, cùng bảng không gặp nhau vòng 1</div>
           </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="random" onclick="phase2SelectPair('random')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="random" onclick="phase2SelectPair('random')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start">
           <span style="font-size:16px;flex-shrink:0">🎰</span>
           <div>
             <div style="font-weight:700;font-size:12px">Bốc thăm hoàn toàn ngẫu nhiên</div>
             <div style="font-size:11px;color:var(--muted);font-weight:400">Không có ràng buộc gì</div>
           </div>
         </button>
-        <button class="btn btn-secondary phase2-pair-btn" data-mode="ranked" onclick="phase2SelectPair('ranked')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn-secondary phase2-pair-btn" data-mode="ranked" onclick="phase2SelectPair('ranked')" style="text-align:left;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-start">
           <span style="font-size:16px;flex-shrink:0">📊</span>
           <div>
             <div style="font-weight:700;font-size:12px">Theo thứ hạng tổng</div>
@@ -3348,6 +3355,7 @@ function openPhase1View() {
   overlay.id = 'phase1ViewOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:99998;overflow-y:auto;padding:16px';
 
+  // ── Header ──
   const header = document.createElement('div');
   header.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:16px;position:sticky;top:0;background:var(--bg);padding-bottom:12px;border-bottom:1px solid var(--border);z-index:1';
   header.innerHTML = '<span style="font-family:Barlow Condensed,sans-serif;font-weight:900;font-size:18px">📋 Kết quả Vòng bảng</span>';
@@ -3355,51 +3363,155 @@ function openPhase1View() {
   closeBtn2.className = 'btn btn-secondary';
   closeBtn2.style.cssText = 'width:auto;padding:6px 14px;margin-left:auto';
   closeBtn2.textContent = '✕ Đóng';
-  closeBtn2.onclick = function() {
-    var el = document.getElementById('phase1ViewOverlay');
-    if (el) el.remove();
-  };
+  closeBtn2.onclick = function() { document.getElementById('phase1ViewOverlay').remove(); };
   header.appendChild(closeBtn2);
   overlay.appendChild(header);
 
-  const container = document.createElement('div');
-  overlay.appendChild(container);
+  // ── Tabs với prefix p1_ để tránh xung đột id ──
+  const groups   = d.groups   || [];
+  const pairsByGroup = d.pairsByGroup || {};
+  const rrResults    = d.rrResults    || {};
+  const hasMatches = Object.keys(pairsByGroup).length > 0;
+  const hasResults = Object.keys(rrResults).length > 0;
+
+  const tabs = document.createElement('div');
+  tabs.className = 'tabs';
+  const tab1 = document.createElement('button');
+  tab1.className = 'tab active'; tab1.id = 'p1_tabGroups';
+  tab1.textContent = '🏅 Chia bảng';
+  tab1.onclick = function(){ p1ShowTab('groups'); };
+  tabs.appendChild(tab1);
+  if (hasMatches) {
+    const tab2 = document.createElement('button');
+    tab2.className = 'tab'; tab2.id = 'p1_tabMatches';
+    tab2.textContent = '📋 Danh sách trận';
+    tab2.onclick = function(){ p1ShowTab('matches'); };
+    tabs.appendChild(tab2);
+  }
+  if (hasResults) {
+    const tab3 = document.createElement('button');
+    tab3.className = 'tab'; tab3.id = 'p1_tabRanking';
+    tab3.textContent = '🏆 Xếp hạng';
+    tab3.onclick = function(){ p1ShowTab('ranking'); };
+    tabs.appendChild(tab3);
+  }
+  overlay.appendChild(tabs);
+
+  // ── Tab Chia bảng ──
+  const gDiv = document.createElement('div'); gDiv.id = 'p1_tabGroups_content';
+  const grid = document.createElement('div'); grid.className = 'groups-grid';
+  groups.forEach((pl, g) => {
+    const gName = 'Bảng ' + String.fromCharCode(65 + g);
+    const card = document.createElement('div'); card.className = 'group-card';
+    card.innerHTML = '<h3>' + gName + '</h3>' + pl.map(p => '<div class="player">' + p + '</div>').join('');
+    grid.appendChild(card);
+  });
+  gDiv.appendChild(grid);
+  overlay.appendChild(gDiv);
+
+  // ── Tab Danh sách trận ──
+  if (hasMatches) {
+    const mDiv = document.createElement('div'); mDiv.id = 'p1_tabMatches_content'; mDiv.style.display = 'none';
+    // Render trận dùng data trực tiếp, không cần S
+    renderP1MatchesTable(mDiv, d);
+    overlay.appendChild(mDiv);
+  }
+
+  // ── Tab Xếp hạng ──
+  if (hasResults) {
+    const rDiv = document.createElement('div'); rDiv.id = 'p1_tabRanking_content'; rDiv.style.display = 'none';
+    renderP1Rankings(rDiv, d);
+    overlay.appendChild(rDiv);
+  }
+
   document.body.appendChild(overlay);
+}
 
-  // Render RR với data phase1 — swap state, render, restore TOÀN BỘ sau khi async xong
-  const savedState = {
-    mode: S.mode, groups: S.groups, pairsByGroup: S.pairsByGroup,
-    rrResults: S.rrResults, schedule: S.schedule, scheduleType: S.scheduleType,
-    showRRSchedule: S.showRRSchedule
-  };
+function p1ShowTab(tab) {
+  ['groups','matches','ranking'].forEach(t => {
+    const btnId = t === 'groups' ? 'p1_tabGroups' : t === 'matches' ? 'p1_tabMatches' : 'p1_tabRanking';
+    const cId   = t === 'groups' ? 'p1_tabGroups_content' : t === 'matches' ? 'p1_tabMatches_content' : 'p1_tabRanking_content';
+    const btn = document.getElementById(btnId);
+    const cnt = document.getElementById(cId);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (cnt) cnt.style.display = t === tab ? '' : 'none';
+  });
+}
 
-  // Patch S tạm thời
-  S.mode = 'roundrobin';
-  S.groups = d.groups;
-  S.pairsByGroup = d.pairsByGroup;
-  S.rrResults = d.rrResults;
-  S.schedule = d.schedule;
-  S.scheduleType = d.scheduleType;
-  S.showRRSchedule = d.showRRSchedule;
+function renderP1MatchesTable(container, d) {
+  const pairsByGroup = d.pairsByGroup || {};
+  const rrResults    = d.rrResults    || {};
+  let html = '';
+  Object.entries(pairsByGroup).forEach(([gName, pairs]) => {
+    html += '<h3 style="margin:16px 0 8px;font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:15px;color:var(--accent)">📋 ' + gName + '</h3>';
+    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted)">#</th>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted)">VĐV 1</th>'
+      + '<th style="text-align:center;padding:6px 8px;font-size:11px;color:var(--muted)">Tỉ số</th>'
+      + '<th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--muted)">VĐV 2</th>'
+      + '</tr></thead><tbody>';
+    pairs.forEach((pair, idx) => {
+      const key = gName + ':' + idx;
+      const res = rrResults[key];
+      const p1 = pair[0] || '?', p2 = pair[1] || '?';
+      let scoreCell = '<span style="color:var(--muted)">–</span>';
+      if (res) {
+        const w1 = res.w1 !== undefined ? res.w1 : res.s1;
+        const w2 = res.w2 !== undefined ? res.w2 : res.s2;
+        const sets = res.sets || [];
+        const main = sets.length === 1 ? (sets[0].s1 + '–' + sets[0].s2) : (w1 + '–' + w2 + ' set');
+        const winner = res.winner;
+        scoreCell = '<span style="background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:700">' + main + '</span>';
+      }
+      const p1Style = res ? (res.winner === p1 ? 'color:#4ade80;font-weight:700' : 'color:var(--muted);text-decoration:line-through') : '';
+      const p2Style = res ? (res.winner === p2 ? 'color:#4ade80;font-weight:700' : 'color:var(--muted);text-decoration:line-through') : '';
+      html += '<tr style="border-top:1px solid var(--border)">'
+        + '<td style="padding:6px 8px;font-size:11px;color:var(--muted)">' + (idx+1) + '</td>'
+        + '<td style="padding:6px 8px;font-size:12px;' + p1Style + '">' + p1 + '</td>'
+        + '<td style="text-align:center;padding:6px 8px">' + scoreCell + '</td>'
+        + '<td style="text-align:right;padding:6px 8px;font-size:12px;' + p2Style + '">' + p2 + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+  });
+  container.innerHTML = html || '<div style="color:var(--muted);padding:16px">Chưa có dữ liệu trận.</div>';
+}
 
-  // renderRRView sync (groups), các tab async load khi click
-  // Quan trọng: KHÔNG restore state ngay — chỉ restore khi đóng overlay
-  renderRRView(container);
+function renderP1Rankings(container, d) {
+  const groups   = d.groups   || [];
+  const rrResults = d.rrResults || {};
+  let html = '';
+  groups.forEach((players, gi) => {
+    const gName = 'Bảng ' + String.fromCharCode(65 + gi);
+    // Tính standings từ data phase1
+    const savedGroups = S.groups, savedPBG = S.pairsByGroup, savedRR = S.rrResults;
+    S.groups = d.groups; S.pairsByGroup = d.pairsByGroup; S.rrResults = d.rrResults;
+    const st = calcRRStandings(gName, players);
+    S.groups = savedGroups; S.pairsByGroup = savedPBG; S.rrResults = savedRR;
 
-  // Khi đóng overlay mới restore state KO
-  // Override closeBtn2.onclick để restore đúng
-  closeBtn2.onclick = function() {
-    var el = document.getElementById('phase1ViewOverlay');
-    if (el) el.remove();
-    // Restore KO state
-    S.mode = savedState.mode;
-    S.groups = savedState.groups;
-    S.pairsByGroup = savedState.pairsByGroup;
-    S.rrResults = savedState.rrResults;
-    S.schedule = savedState.schedule;
-    S.scheduleType = savedState.scheduleType;
-    S.showRRSchedule = savedState.showRRSchedule;
-  };
+    html += '<h3 style="margin:16px 0 8px;font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:15px;color:var(--accent)">🏆 ' + gName + '</h3>';
+    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Hạng</th>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted)">VĐV</th>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Điểm</th>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">T</th>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">B</th>'
+      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Hiệu số</th>'
+      + '</tr></thead><tbody>';
+    st.forEach((p, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+      html += '<tr style="border-top:1px solid var(--border)">'
+        + '<td style="padding:6px 8px;text-align:center;font-size:13px">' + medal + '</td>'
+        + '<td style="padding:6px 8px;font-size:12px;font-weight:' + (i===0?'700':'400') + ';color:' + (i===0?'#fbbf24':'var(--text)') + '">' + p.name + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;font-weight:700;color:var(--accent)">' + p.p + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;color:#4ade80">' + (p.w||0) + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;color:#f87171">' + (p.l||0) + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;color:' + (p.diff>=0?'#4ade80':'#f87171') + '">' + (p.diff>=0?'+':'') + p.diff + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+  });
+  container.innerHTML = html || '<div style="color:var(--muted);padding:16px">Chưa có kết quả.</div>';
 }
 
 /* ════════════════════════════════════════
@@ -4064,8 +4176,11 @@ async function renderKOMatchesTable(container) {
       // Thua bán kết 1 và 2
       const loser1 = res1 ? (res1.winner === sf1.p1 ? sf1.p2 : sf1.p1) : null;
       const loser2 = res2 ? (res2.winner === sf2.p1 ? sf2.p2 : sf2.p1) : null;
-      const p1_3rd = loser1 || 'Thua trận 1';
-      const p2_3rd = loser2 || 'Thua trận 2';
+      // Lấy số trận thật của bán kết từ knockoutMatchNos
+      const sfMatchNo1 = sf1.matchNo || S.knockoutMatchNos[(totalRounds-2)+',0'] || '?';
+      const sfMatchNo2 = sf2.matchNo || S.knockoutMatchNos[(totalRounds-2)+',1'] || '?';
+      const p1_3rd = loser1 || ('Thua trận ' + sfMatchNo1);
+      const p2_3rd = loser2 || ('Thua trận ' + sfMatchNo2);
       const result3 = S.knockoutResults['3rd'];
 
       let p1Class3 = '', p2Class3 = '';
