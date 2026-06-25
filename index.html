@@ -3478,39 +3478,67 @@ function renderP1MatchesTable(container, d) {
 }
 
 function renderP1Rankings(container, d) {
-  const groups   = d.groups   || [];
-  const rrResults = d.rrResults || {};
-  let html = '';
+  const groups = d.groups || [];
+
+  // Swap S tạm thời để calcRRStandings hoạt động đúng
+  const savedGroups = S.groups, savedPBG = S.pairsByGroup, savedRR = S.rrResults;
+  S.groups = d.groups; S.pairsByGroup = d.pairsByGroup; S.rrResults = d.rrResults;
+
+  // Dùng 1 table duy nhất cho tất cả bảng → cột thẳng hàng
+  let html = '<table style="width:100%;border-collapse:collapse">';
+  html += '<colgroup>'
+    + '<col style="width:40px"/>'   // Hạng
+    + '<col/>'                       // VĐV (co giãn)
+    + '<col style="width:60px"/>'   // Bảng
+    + '<col style="width:60px"/>'   // Điểm
+    + '<col style="width:44px"/>'   // T
+    + '<col style="width:44px"/>'   // B
+    + '<col style="width:70px"/>'   // Hiệu số
+    + '</colgroup>';
+  html += '<thead><tr style="background:rgba(255,255,255,.04)">'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Hạng</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)">VĐV</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Bảng</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Điểm</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">T</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">B</th>'
+    + '<th style="padding:7px 8px;font-size:11px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border)">Hiệu số</th>'
+    + '</tr></thead><tbody>';
+
   groups.forEach((players, gi) => {
     const gName = 'Bảng ' + String.fromCharCode(65 + gi);
-    // Tính standings từ data phase1
-    const savedGroups = S.groups, savedPBG = S.pairsByGroup, savedRR = S.rrResults;
-    S.groups = d.groups; S.pairsByGroup = d.pairsByGroup; S.rrResults = d.rrResults;
     const st = calcRRStandings(gName, players);
-    S.groups = savedGroups; S.pairsByGroup = savedPBG; S.rrResults = savedRR;
 
-    html += '<h3 style="margin:16px 0 8px;font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:15px;color:var(--accent)">🏆 ' + gName + '</h3>';
-    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Hạng</th>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted)">VĐV</th>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Điểm</th>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">T</th>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">B</th>'
-      + '<th style="padding:5px 8px;font-size:11px;color:var(--muted);text-align:center">Hiệu số</th>'
-      + '</tr></thead><tbody>';
+    // Group header row
+    html += '<tr><td colspan="7" style="padding:10px 8px 4px;font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:13px;color:var(--accent);letter-spacing:.5px;background:rgba(255,255,255,.02)">'
+      + '🏆 ' + gName + '</td></tr>';
+
     st.forEach((p, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '<span style="color:var(--muted)">' + (i+1) + '</span>';
+      const nameColor = i === 0 ? '#fbbf24' : 'var(--text)';
+      const diffColor = p.diff >= 0 ? '#4ade80' : '#f87171';
       html += '<tr style="border-top:1px solid var(--border)">'
         + '<td style="padding:6px 8px;text-align:center;font-size:13px">' + medal + '</td>'
-        + '<td style="padding:6px 8px;font-size:12px;font-weight:' + (i===0?'700':'400') + ';color:' + (i===0?'#fbbf24':'var(--text)') + '">' + p.name + '</td>'
+        + '<td style="padding:6px 8px;font-size:12px;font-weight:' + (i===0?'700':'400') + ';color:' + nameColor + '">' + (p.name || '–') + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted)">' + gName + '</td>'
         + '<td style="padding:6px 8px;text-align:center;font-weight:700;color:var(--accent)">' + p.p + '</td>'
         + '<td style="padding:6px 8px;text-align:center;color:#4ade80">' + (p.w||0) + '</td>'
         + '<td style="padding:6px 8px;text-align:center;color:#f87171">' + (p.l||0) + '</td>'
-        + '<td style="padding:6px 8px;text-align:center;color:' + (p.diff>=0?'#4ade80':'#f87171') + '">' + (p.diff>=0?'+':'') + p.diff + '</td>'
+        + '<td style="padding:6px 8px;text-align:center;color:' + diffColor + '">' + (p.diff>=0?'+':'') + p.diff + '</td>'
         + '</tr>';
     });
-    html += '</tbody></table>';
+
+    // Dòng phân cách giữa các bảng
+    if (gi < groups.length - 1) {
+      html += '<tr><td colspan="7" style="padding:4px;background:rgba(255,255,255,.02)"></td></tr>';
+    }
   });
+
+  html += '</tbody></table>';
+
+  // Restore S
+  S.groups = savedGroups; S.pairsByGroup = savedPBG; S.rrResults = savedRR;
+
   container.innerHTML = html || '<div style="color:var(--muted);padding:16px">Chưa có kết quả.</div>';
 }
 
